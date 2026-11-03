@@ -34,6 +34,22 @@ export const MOOD_BLURB: Record<Mood, string> = {
 };
 
 const WORKOUT_CONSISTENCY_WINDOW_DAYS = 3;
+const NUTRITION_WINDOW_DAYS = 3;
+const SURPLUS_TOLERANCE = 1.15;
+
+export { NUTRITION_WINDOW_DAYS };
+
+/**
+ * Off target only after a sustained surplus: the average of the days that have
+ * meals logged must exceed the target by more than 15%. Days with nothing
+ * logged are ignored, so skipping the diary never counts against you.
+ */
+export function isNutritionOnTarget(dailyEnergy: number[], energyTarget: number): boolean {
+  const logged = dailyEnergy.filter((e) => e > 0);
+  if (logged.length === 0) return true;
+  const avg = logged.reduce((a, b) => a + b, 0) / logged.length;
+  return avg <= energyTarget * SURPLUS_TOLERANCE;
+}
 
 /** True if `lastWorkoutDate` falls within the rolling consistency window, as of `now`. */
 export function isWorkoutConsistent(lastWorkoutDate: Date | null, now: Date = new Date()): boolean {

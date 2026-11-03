@@ -5,6 +5,7 @@ import type { Mood } from '../lib/character';
 const COLS = 10;
 const ROWS = 14;
 const PIXEL = 14;
+const EYE = '#2b1f2e';
 
 type Palette = {
   skin: string;
@@ -34,17 +35,18 @@ function buildGrid(mood: Mood): (string | null)[][] {
 
   const grid: (string | null)[][] = Array.from({ length: ROWS }, () => Array<string | null>(COLS).fill(null));
 
-  for (let c = 3; c <= 6; c++) grid[0][c] = palette.hair;
+  for (let c = 2; c <= 7; c++) grid[0][c] = palette.hair;
   if (messy) {
-    grid[0][2] = palette.hair;
-    grid[0][7] = palette.hair;
-    grid[1][2] = palette.hair;
+    grid[1][1] = palette.hair;
+    grid[1][8] = palette.hair;
   }
 
   const headRowStart = slouched ? 2 : 1;
   for (let r = headRowStart; r < headRowStart + 3; r++) {
-    for (let c = 3; c <= 6; c++) grid[r][c] = palette.skin;
+    for (let c = 2; c <= 7; c++) grid[r][c] = palette.skin;
   }
+  grid[headRowStart + 1][3] = EYE;
+  grid[headRowStart + 1][6] = EYE;
 
   const torsoRowStart = headRowStart + 3;
   for (let r = torsoRowStart; r < torsoRowStart + 5; r++) {
@@ -67,8 +69,8 @@ function buildGrid(mood: Mood): (string | null)[][] {
     grid[r][6] = palette.pants;
   }
 
-  grid[0][1] = palette.accent;
-  grid[0][8] = palette.accent;
+  grid[0][0] = palette.accent;
+  grid[0][9] = palette.accent;
 
   return grid;
 }
