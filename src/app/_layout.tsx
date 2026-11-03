@@ -4,27 +4,69 @@ import {
   PixelifySans_700Bold,
   useFonts,
 } from '@expo-google-fonts/pixelify-sans';
-import { Stack } from 'expo-router';
+import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ProblemScreen } from '../components/ProblemScreen';
 import { DATABASE_NAME, initDatabase } from '../lib/db';
 import { colors, fonts } from '../theme';
 
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  return <ProblemScreen title="Something went wrong" detail={String(error?.stack ?? error)} onRetry={retry} />;
+}
+
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     PixelifySans_400Regular,
     PixelifySans_500Medium,
     PixelifySans_700Bold,
   });
+  const [dbError, setDbError] = useState<Error | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
-  if (!fontsLoaded) return null;
+  // On web the database worker can fail outside React (another tab holds the file), which would otherwise leave a blank page.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const onError = (event: ErrorEvent) => {
+      if (/createSyncAccessHandle|Access Handle/i.test(event.message)) setDbError(new Error(event.message));
+    };
+    const onRejection = (event: PromiseRejectionEvent) => {
+      const message = String(event.reason?.message ?? event.reason);
+      if (/createSyncAccessHandle|Access Handle/i.test(message)) setDbError(new Error(message));
+    };
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onRejection);
+    };
+  }, []);
+
+  // A font failure falls back to the system font rather than leaving a blank screen.
+  if (!fontsLoaded && !fontError) return null;
+
+  if (dbError) {
+    return (
+      <ProblemScreen
+        title="Couldn't open the database"
+        hint="On web, the database can only be open in one tab at a time. Close other LevelUp tabs, then try again."
+        detail={String(dbError.message ?? dbError)}
+        onRetry={() => {
+          setDbError(null);
+          setAttempt((a) => a + 1);
+        }}
+      />
+    );
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <SQLiteProvider databaseName={DATABASE_NAME} onInit={initDatabase}>
+        <SQLiteProvider key={attempt} databaseName={DATABASE_NAME} onInit={initDatabase} onError={setDbError}>
           <Stack
             screenOptions={{
               headerStyle: { backgroundColor: colors.night },
