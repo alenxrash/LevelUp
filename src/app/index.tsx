@@ -2,12 +2,15 @@ import React, { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext, type SQLiteDatabase } from 'expo-sqlite';
-import { AvatarRoom } from '../components/AvatarRoom';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatNumber, WorkoutCalendarWidget } from '../components/CalendarWidget';
-import { MacroBars } from '../components/MacroBars';
+import { MacroJars } from '../components/MacroJars';
 import { PixelButton } from '../components/PixelButton';
+import { PixelFrame } from '../components/PixelFrame';
+import { PixelIcon } from '../components/PixelIcon';
 import { PixelPanel } from '../components/PixelPanel';
 import { PixelText } from '../components/PixelText';
+import { RoomScene } from '../components/RoomScene';
 import { SegmentBar } from '../components/SegmentBar';
 import { useActiveWorkout, workoutStore } from '../lib/activeWorkout';
 import { MOOD_BLURB, MOOD_LABEL, NUTRITION_WINDOW_DAYS, type Mood } from '../lib/character';
@@ -33,6 +36,14 @@ interface DashboardData {
 }
 
 const EMPTY_MACROS: Macros = { energy: 0, carbs: 0, protein: 0 };
+const GLASS = 'rgba(18,14,36,0.8)';
+
+const MOOD_DOT: Record<Mood, string> = {
+  thriving: colors.teal,
+  bulking: colors.amber,
+  leanTired: colors.lilac,
+  scruffy: colors.rose,
+};
 
 async function loadDashboard(db: SQLiteDatabase): Promise<DashboardData> {
   const now = new Date();
@@ -53,6 +64,7 @@ async function loadDashboard(db: SQLiteDatabase): Promise<DashboardData> {
 
 export default function Home() {
   const db = useSQLiteContext();
+  const insets = useSafeAreaInsets();
   const activeWorkout = useActiveWorkout();
   const [data, setData] = useState<DashboardData | null>(null);
 
@@ -76,6 +88,10 @@ export default function Home() {
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   });
   const monthVolume = thisMonth.reduce((sum, s) => sum + s.volume, 0);
+  const lastWorkout = data.summaries[0];
+  const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const daysAgo = lastWorkout ? Math.round((midnight(now) - midnight(new Date(lastWorkout.date))) / 86400000) : null;
+  const lastLabel = daysAgo === null ? 'None yet' : daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`;
 
   function startWorkout() {
     workoutStore.start();
@@ -84,65 +100,89 @@ export default function Home() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <PixelPanel title={`LV ${data.level.level}`} tone="night">
-        <View style={styles.levelRow}>
-          <View style={{ flex: 1 }}>
-            <SegmentBar fraction={data.level.xpIntoLevel / data.level.xpPerLevel} color={colors.butter} segments={16} />
-          </View>
-          <PixelText size={14} color={colors.parchment}>
-            {data.level.xpIntoLevel}/{data.level.xpPerLevel} XP
-          </PixelText>
+      <RoomScene mood={data.mood}>
+        <View style={[styles.hud, { top: insets.top + 10 }]}>
+          <PixelFrame fill={GLASS} edge={colors.border} step={2}>
+            <View style={styles.chip}>
+              <PixelText variant="label" size={10} color={colors.amber}>Lv {data.level.level}</PixelText>
+              <View style={{ width: 84 }}>
+                <SegmentBar fraction={data.level.xpIntoLevel / data.level.xpPerLevel} color={colors.amber} segments={10} />
+              </View>
+            </View>
+          </PixelFrame>
+
+          <PixelFrame fill={GLASS} edge={colors.border} step={2}>
+            <View style={styles.chip}>
+              <PixelIcon name="flame" color={colors.amber} color2="#ffe08a" px={2} />
+              <PixelText variant="bold" size={16}>{data.streak}</PixelText>
+            </View>
+          </PixelFrame>
         </View>
-      </PixelPanel>
 
-      <View>
-        <AvatarRoom mood={data.mood} />
-        <View style={styles.moodBanner}>
-          <PixelText weight="bold" size={18} color={colors.parchment}>{MOOD_LABEL[data.mood]}</PixelText>
-          <PixelText size={14} color={colors.parchmentDark}>{MOOD_BLURB[data.mood]}</PixelText>
+        <View style={styles.caption}>
+          <PixelFrame fill={GLASS} edge={colors.border} step={2}>
+            <View style={styles.captionInner}>
+              <View style={[styles.dot, { backgroundColor: MOOD_DOT[data.mood] }]} />
+              <View style={{ flex: 1 }}>
+                <PixelText variant="bold" size={16}>{MOOD_LABEL[data.mood]}</PixelText>
+                <PixelText size={13} color={colors.textDim}>{MOOD_BLURB[data.mood]}</PixelText>
+              </View>
+            </View>
+          </PixelFrame>
         </View>
-      </View>
+      </RoomScene>
 
-      <View style={styles.buttonRow}>
-        <PixelButton
-          label={activeWorkout ? 'Resume Workout' : 'Start Workout'}
-          color={colors.moss}
-          onPress={startWorkout}
-          style={{ flex: 1 }}
-        />
-        <PixelButton label="Log Meal" color={colors.butter} onPress={() => router.push('/log-meal')} style={{ flex: 1 }} />
-      </View>
+      <View style={styles.body}>
+        <View style={styles.dock}>
+          <PixelButton
+            tile
+            icon="dumbbell"
+            tone="teal"
+            label={activeWorkout ? 'Resume Workout' : 'Start Workout'}
+            onPress={startWorkout}
+            style={{ flex: 1 }}
+          />
+          <PixelButton tile icon="bowl" tone="amber" label="Log Meal" onPress={() => router.push('/log-meal')} style={{ flex: 1 }} />
+        </View>
 
-      <View style={styles.widgetRow}>
-        <PixelPanel title="Training" style={{ flex: 1.55 }}>
-          <WorkoutCalendarWidget summaries={data.summaries} />
+        <PixelPanel label="Today's fuel">
+          <MacroJars today={data.today} />
         </PixelPanel>
-        <View style={styles.widgetColumn}>
-          <PixelPanel title="Streak">
-            <PixelText weight="bold" size={30} color={colors.terracotta}>{data.streak}</PixelText>
-            <PixelText size={13} color={colors.inkSoft}>{data.streak === 1 ? 'day' : 'days'} in a row</PixelText>
-          </PixelPanel>
-          <PixelPanel title="This Month">
-            <PixelText weight="bold" size={30} color={colors.mossDark}>{thisMonth.length}</PixelText>
-            <PixelText size={13} color={colors.inkSoft}>workouts</PixelText>
-            <PixelText size={13} color={colors.inkSoft}>{formatNumber(monthVolume)} kg lifted</PixelText>
-          </PixelPanel>
+
+        <View style={styles.widgets}>
+          <View style={{ flex: 1.65 }}>
+            <WorkoutCalendarWidget summaries={data.summaries} />
+          </View>
+          <View style={styles.tiles}>
+            <PixelPanel label="Last workout">
+              <PixelText variant="bold" size={22}>{lastLabel}</PixelText>
+              <PixelText size={13} color={colors.textDim} numberOfLines={1}>{lastWorkout?.name ?? 'Time to start'}</PixelText>
+            </PixelPanel>
+            <PixelPanel label="This month">
+              <View style={styles.tileValue}>
+                <PixelIcon name="dumbbell" color={colors.teal} px={2} />
+                <PixelText variant="bold" size={28}>{thisMonth.length}</PixelText>
+              </View>
+              <PixelText size={13} color={colors.textDim}>{formatNumber(monthVolume)} kg lifted</PixelText>
+            </PixelPanel>
+          </View>
         </View>
       </View>
-
-      <PixelPanel title="Today's Fuel">
-        <MacroBars today={data.today} />
-      </PixelPanel>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.night },
-  content: { padding: 20, paddingTop: 28, paddingBottom: 48, gap: 28 },
-  levelRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  moodBanner: { backgroundColor: colors.ink, paddingVertical: 8, paddingHorizontal: 12, gap: 2 },
-  buttonRow: { flexDirection: 'row', gap: 16 },
-  widgetRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  widgetColumn: { flex: 1, gap: 24 },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  content: { paddingBottom: 48 },
+  hud: { position: 'absolute', left: 10, right: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  caption: { position: 'absolute', left: 10, right: 10, bottom: 10 },
+  captionInner: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10 },
+  dot: { width: 10, height: 10 },
+  body: { padding: 16, paddingTop: 20, gap: 20 },
+  dock: { flexDirection: 'row', gap: 12 },
+  widgets: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  tiles: { flex: 1, gap: 12 },
+  tileValue: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });

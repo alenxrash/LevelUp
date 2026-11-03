@@ -56,40 +56,43 @@ export default function LogMeal() {
     }
   }
 
+  const total = todays.reduce((sum, m) => sum + m.energy, 0);
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <PixelPanel title="New Meal">
-        <View style={styles.form}>
-          <PixelInput label="Meal" placeholder="Chicken & rice" value={name} onChangeText={setName} />
-          <View style={styles.row}>
-            <PixelInput label="Energy (kcal)" placeholder="650" keyboardType="numeric" value={energy} onChangeText={setEnergy} />
-          </View>
-          <View style={styles.row}>
-            <PixelInput label="Carbs (g)" placeholder="70" keyboardType="numeric" value={carbs} onChangeText={setCarbs} />
-            <PixelInput label="Protein (g)" placeholder="45" keyboardType="numeric" value={protein} onChangeText={setProtein} />
-          </View>
-          <PixelButton label="Add & Log Another" color={colors.sky} onPress={() => addMeal(false)} disabled={!canSave || saving} />
+      <PixelPanel label="New meal">
+        <PixelInput label="Meal" placeholder="Chicken & rice" value={name} onChangeText={setName} />
+        <PixelInput label="Energy (kcal)" placeholder="650" keyboardType="numeric" value={energy} onChangeText={setEnergy} />
+        <View style={styles.row}>
+          <PixelInput label="Carbs (g)" placeholder="70" keyboardType="numeric" value={carbs} onChangeText={setCarbs} />
+          <PixelInput label="Protein (g)" placeholder="45" keyboardType="numeric" value={protein} onChangeText={setProtein} />
         </View>
+        <PixelButton label="Add & Log Another" tone="ghost" icon="plus" onPress={() => addMeal(false)} disabled={!canSave || saving} />
       </PixelPanel>
 
-      <PixelPanel title={`Eaten Today (${todays.length})`}>
+      <PixelPanel label={`Eaten today (${todays.length})`}>
         {todays.length === 0 ? (
-          <PixelText color={colors.inkSoft}>Nothing logged yet today.</PixelText>
+          <PixelText color={colors.textFaint}>Nothing logged yet today.</PixelText>
         ) : (
           <View style={styles.list}>
             {todays.map((m) => (
               <View key={m.id} style={styles.mealRow}>
-                <PixelText weight="bold" style={{ flex: 1 }}>{m.name}</PixelText>
-                <PixelText color={colors.inkSoft}>{Math.round(m.energy)} kcal</PixelText>
+                <PixelText variant="bold" size={16} style={{ flex: 1 }}>{m.name}</PixelText>
+                <PixelText color={colors.textDim}>{Math.round(m.energy)} kcal</PixelText>
               </View>
             ))}
+            <View style={styles.totalRow}>
+              <PixelText variant="label" size={10}>Total</PixelText>
+              <PixelText variant="bold" color={colors.amber}>{Math.round(total)} kcal</PixelText>
+            </View>
           </View>
         )}
       </PixelPanel>
 
       <PixelButton
         label={saving ? 'Saving...' : 'Add Meal  +10 XP'}
-        color={colors.butter}
+        tone="amber"
+        icon="bowl"
         onPress={() => addMeal(true)}
         disabled={!canSave || saving}
       />
@@ -98,10 +101,10 @@ export default function LogMeal() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.night },
-  content: { padding: 20, paddingTop: 28, gap: 28 },
-  form: { gap: 12 },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: 16, paddingTop: 20, gap: 18 },
   row: { flexDirection: 'row', gap: 12 },
   list: { gap: 8 },
   mealRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 2, borderColor: colors.border, paddingTop: 8, marginTop: 4 },
 });

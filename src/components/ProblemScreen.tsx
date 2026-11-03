@@ -26,11 +26,11 @@ export function ProblemScreen({ title, detail, hint, onRetry }: Props) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.night },
+  screen: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 24, paddingTop: 64, gap: 16 },
-  title: { color: colors.parchment, fontSize: 22, fontWeight: '700' },
-  hint: { color: colors.butter, fontSize: 16, lineHeight: 22 },
-  detail: { color: colors.parchmentDark, fontSize: 13, lineHeight: 18, fontFamily: 'monospace' },
-  button: { backgroundColor: colors.moss, paddingVertical: 12, paddingHorizontal: 20, alignSelf: 'flex-start' },
-  buttonText: { color: colors.ink, fontSize: 16, fontWeight: '700' },
+  title: { color: colors.text, fontSize: 22, fontWeight: '700' },
+  hint: { color: colors.amber, fontSize: 16, lineHeight: 22 },
+  detail: { color: colors.textDim, fontSize: 13, lineHeight: 18, fontFamily: 'monospace' },
+  button: { backgroundColor: colors.teal, paddingVertical: 12, paddingHorizontal: 20, alignSelf: 'flex-start' },
+  buttonText: { color: '#16302c', fontSize: 16, fontWeight: '700' },
 });

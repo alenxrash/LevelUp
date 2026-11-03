@@ -3,6 +3,8 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { toDayKey } from '../lib/dates';
 import type { WorkoutSummary } from '../lib/db';
 import { colors } from '../theme';
+import { PixelFrame } from './PixelFrame';
+import { PixelIcon } from './PixelIcon';
 import { PixelText } from './PixelText';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -18,6 +20,7 @@ export function formatNumber(n: number): string {
   return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
+/** A pinned paper wall calendar; days with a workout get a stamp, and tapping one shows that session. */
 export function WorkoutCalendarWidget({ summaries }: { summaries: WorkoutSummary[] }) {
   const today = new Date();
   const todayKey = toDayKey(today);
@@ -52,75 +55,87 @@ export function WorkoutCalendarWidget({ summaries }: { summaries: WorkoutSummary
   const selectedWorkouts = selected ? byDay.get(selected) ?? [] : [];
 
   return (
-    <View style={styles.wrap}>
-      <View style={styles.header}>
-        <Pressable onPress={() => shiftMonth(-1)} style={styles.nav} hitSlop={8}>
-          <PixelText weight="bold" size={14}>{'<'}</PixelText>
-        </Pressable>
-        <PixelText weight="bold" size={15}>{MONTHS[cursor.month]} {cursor.year}</PixelText>
-        <Pressable onPress={() => shiftMonth(1)} style={styles.nav} hitSlop={8}>
-          <PixelText weight="bold" size={14}>{'>'}</PixelText>
-        </Pressable>
+    <PixelFrame fill={colors.paper} edge={colors.paperDark} step={3}>
+      <View style={styles.pegs}>
+        <View style={styles.peg} />
+        <View style={styles.peg} />
       </View>
-
-      <View style={styles.row}>
-        {WEEKDAYS.map((d, i) => (
-          <View key={i} style={styles.slot}>
-            <PixelText size={11} color={colors.inkSoft} style={styles.center}>{d}</PixelText>
-          </View>
-        ))}
-      </View>
-
-      {rows.map((row, r) => (
-        <View key={r} style={styles.row}>
-          {row.map((day, c) => {
-            if (day === null) return <View key={c} style={styles.slot} />;
-            const key = toDayKey(new Date(cursor.year, cursor.month, day));
-            const worked = byDay.has(key);
-            return (
-              <Pressable key={c} style={styles.slot} disabled={!worked} onPress={() => setSelected(selected === key ? null : key)}>
-                <View
-                  style={[
-                    styles.cell,
-                    worked && styles.cellWorked,
-                    key === todayKey && styles.cellToday,
-                    key === selected && styles.cellSelected,
-                  ]}
-                >
-                  <PixelText weight={worked ? 'bold' : 'regular'} size={11} color={worked ? colors.white : colors.ink}>{day}</PixelText>
-                </View>
-              </Pressable>
-            );
-          })}
+      <View style={styles.body}>
+        <View style={styles.header}>
+          <Pressable onPress={() => shiftMonth(-1)} hitSlop={10} style={styles.nav}>
+            <PixelIcon name="chevL" color={colors.paperInk} px={2} />
+          </Pressable>
+          <PixelText variant="bold" size={16} color={colors.paperInk}>{MONTHS[cursor.month]} {cursor.year}</PixelText>
+          <Pressable onPress={() => shiftMonth(1)} hitSlop={10} style={styles.nav}>
+            <PixelIcon name="chevR" color={colors.paperInk} px={2} />
+          </Pressable>
         </View>
-      ))}
+        <View style={styles.rule} />
 
-      {selectedWorkouts.length > 0 && (
-        <View style={styles.detail}>
-          {selectedWorkouts.map((w) => (
-            <View key={w.id}>
-              <PixelText weight="bold" size={13}>{w.name ?? 'Workout'}</PixelText>
-              <PixelText size={12} color={colors.inkSoft}>
-                {[formatDuration(w.durationSec), `${formatNumber(w.volume)} kg`, `${w.sets} sets`].filter(Boolean).join(' / ')}
-              </PixelText>
+        <View style={styles.row}>
+          {WEEKDAYS.map((d, i) => (
+            <View key={i} style={styles.slot}>
+              <PixelText variant="label" size={9} color={colors.paperFaint} style={styles.center}>{d}</PixelText>
             </View>
           ))}
         </View>
-      )}
-    </View>
+
+        {rows.map((row, r) => (
+          <View key={r} style={styles.row}>
+            {row.map((day, c) => {
+              if (day === null) return <View key={c} style={styles.slot} />;
+              const key = toDayKey(new Date(cursor.year, cursor.month, day));
+              const worked = byDay.has(key);
+              return (
+                <Pressable key={c} style={styles.slot} disabled={!worked} onPress={() => setSelected(selected === key ? null : key)}>
+                  <View
+                    style={[
+                      styles.cell,
+                      worked && styles.cellWorked,
+                      key === todayKey && styles.cellToday,
+                      key === selected && styles.cellSelected,
+                    ]}
+                  >
+                    <PixelText variant={worked ? 'bold' : 'body'} size={12} color={worked ? colors.white : colors.paperInk}>
+                      {day}
+                    </PixelText>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
+
+        {selectedWorkouts.length > 0 && (
+          <View style={styles.detail}>
+            {selectedWorkouts.map((w) => (
+              <View key={w.id}>
+                <PixelText variant="bold" size={14} color={colors.paperInk}>{w.name ?? 'Workout'}</PixelText>
+                <PixelText size={12} color={colors.paperFaint}>
+                  {[formatDuration(w.durationSec), `${formatNumber(w.volume)} kg`, `${w.sets} sets`].filter(Boolean).join(' / ')}
+                </PixelText>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    </PixelFrame>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 2 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
-  nav: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.parchmentDark, borderWidth: 2, borderColor: colors.ink },
+  pegs: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 18, paddingTop: 6 },
+  peg: { width: 8, height: 8, backgroundColor: colors.paperInk },
+  body: { padding: 10, paddingTop: 8, gap: 2 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 4 },
+  nav: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
+  rule: { height: 2, backgroundColor: colors.rose, marginBottom: 6 },
   row: { flexDirection: 'row' },
   slot: { width: `${100 / 7}%`, aspectRatio: 1, padding: 1 },
   center: { textAlign: 'center' },
-  cell: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.parchmentDark },
-  cellWorked: { backgroundColor: colors.moss, borderWidth: 2, borderColor: colors.mossDark },
-  cellToday: { borderWidth: 2, borderColor: colors.berry },
-  cellSelected: { borderWidth: 2, borderColor: colors.ink },
-  detail: { marginTop: 8, paddingTop: 8, borderTopWidth: 2, borderColor: colors.ink, gap: 6 },
+  cell: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  cellWorked: { backgroundColor: colors.tealDeep },
+  cellToday: { borderWidth: 2, borderColor: colors.roseDeep },
+  cellSelected: { borderWidth: 2, borderColor: colors.paperInk },
+  detail: { marginTop: 8, paddingTop: 8, borderTopWidth: 2, borderColor: colors.paperDark, gap: 6 },
 });

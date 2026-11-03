@@ -4,6 +4,7 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@expo-google-fonts/pixelify-sans": "^0.4.2",
+    "@expo-google-fonts/silkscreen": "^0.4.2",
     "expo": "~58.0.22",
     "expo-constants": "^58.0.14",
     "expo-font": "~58.0.11",

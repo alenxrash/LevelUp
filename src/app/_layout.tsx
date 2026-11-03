@@ -4,6 +4,7 @@ import {
   PixelifySans_700Bold,
   useFonts,
 } from '@expo-google-fonts/pixelify-sans';
+import { Silkscreen_400Regular, Silkscreen_700Bold } from '@expo-google-fonts/silkscreen';
 import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
@@ -24,6 +25,8 @@ export default function RootLayout() {
     PixelifySans_400Regular,
     PixelifySans_500Medium,
     PixelifySans_700Bold,
+    Silkscreen_400Regular,
+    Silkscreen_700Bold,
   });
   const [dbError, setDbError] = useState<Error | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -69,14 +72,14 @@ export default function RootLayout() {
         <SQLiteProvider key={attempt} databaseName={DATABASE_NAME} onInit={initDatabase} onError={setDbError}>
           <Stack
             screenOptions={{
-              headerStyle: { backgroundColor: colors.night },
-              headerTintColor: colors.parchment,
-              headerTitleStyle: { fontFamily: fonts.bold, fontSize: 20 },
+              headerStyle: { backgroundColor: colors.bg },
+              headerTintColor: colors.text,
+              headerTitleStyle: { fontFamily: fonts.bodyBold, fontSize: 20 },
               headerShadowVisible: false,
-              contentStyle: { backgroundColor: colors.night },
+              contentStyle: { backgroundColor: colors.bg },
             }}
           >
-            <Stack.Screen name="index" options={{ title: 'LevelUp' }} />
+            <Stack.Screen name="index" options={{ headerShown: false }} />
             <Stack.Screen name="workout" options={{ title: 'Workout', presentation: 'modal' }} />
             <Stack.Screen name="log-meal" options={{ title: 'Log Meal', presentation: 'modal' }} />
           </Stack>

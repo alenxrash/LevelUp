@@ -1,56 +1,39 @@
 import React from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { BORDER, SHADOW, colors } from '../theme';
+import { colors } from '../theme';
+import { PixelFrame } from './PixelFrame';
 import { PixelText } from './PixelText';
 
 interface Props {
-  title?: string;
-  tone?: 'parchment' | 'night';
+  label?: string;
+  /** `paper` renders a cream card for things that should read as printed objects. */
+  tone?: 'night' | 'paper';
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }
 
-export function PixelPanel({ title, tone = 'parchment', style, children }: Props) {
-  const bg = tone === 'parchment' ? colors.parchment : colors.nightLight;
+export function PixelPanel({ label, tone = 'night', style, children }: Props) {
+  const paper = tone === 'paper';
   return (
-    <View style={[styles.wrap, style]}>
-      <View style={styles.shadow} />
-      <View style={[styles.panel, { backgroundColor: bg }]}>
-        {title ? (
-          <View style={styles.titleTab}>
-            <PixelText weight="bold" size={14} color={colors.parchment}>
-              {title}
-            </PixelText>
-          </View>
+    <PixelFrame
+      fill={paper ? colors.paper : colors.panel}
+      edge={paper ? colors.paperDark : colors.border}
+      step={3}
+      style={style}
+    >
+      <View style={styles.inner}>
+        {label ? (
+          <PixelText variant="label" size={10} color={paper ? colors.paperFaint : colors.textDim} style={styles.label}>
+            {label}
+          </PixelText>
         ) : null}
         {children}
       </View>
-    </View>
+    </PixelFrame>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginRight: SHADOW, marginBottom: SHADOW },
-  shadow: {
-    position: 'absolute',
-    top: SHADOW,
-    left: SHADOW,
-    right: -SHADOW,
-    bottom: -SHADOW,
-    backgroundColor: '#1a1220',
-  },
-  panel: {
-    borderWidth: BORDER,
-    borderColor: colors.ink,
-    padding: 14,
-    paddingTop: 18,
-  },
-  titleTab: {
-    position: 'absolute',
-    top: -BORDER - 11,
-    left: 10,
-    backgroundColor: colors.ink,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
+  inner: { padding: 14, gap: 10 },
+  label: { marginBottom: 2 },
 });

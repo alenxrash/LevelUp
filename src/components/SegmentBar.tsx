@@ -14,20 +14,13 @@ export function SegmentBar({ fraction, color, segments = 12 }: Props) {
   return (
     <View style={styles.bar}>
       {Array.from({ length: segments }, (_, i) => (
-        <View key={i} style={[styles.segment, { backgroundColor: i < filled ? color : colors.parchmentDark }]} />
+        <View key={i} style={[styles.segment, { backgroundColor: i < filled ? color : colors.border }]} />
       ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bar: {
-    flexDirection: 'row',
-    gap: 2,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    padding: 2,
-    backgroundColor: colors.ink,
-  },
-  segment: { flex: 1, height: 12 },
+  bar: { flexDirection: 'row', gap: 2, padding: 2, backgroundColor: colors.panelDeep },
+  segment: { flex: 1, height: 6 },
 });

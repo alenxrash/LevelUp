@@ -2,18 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { AvatarRoom } from '../components/AvatarRoom';
 import { formatDuration, formatNumber } from '../components/CalendarWidget';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ExerciseCard } from '../components/ExerciseCard';
 import { ExercisePicker } from '../components/ExercisePicker';
 import { PixelButton } from '../components/PixelButton';
+import { PixelFrame } from '../components/PixelFrame';
 import { PixelInput } from '../components/PixelInput';
 import { PixelPanel } from '../components/PixelPanel';
 import { PixelText } from '../components/PixelText';
+import { RoomScene } from '../components/RoomScene';
 import { useActiveWorkout, workoutStore, workoutTotals } from '../lib/activeWorkout';
-import type { Mood } from '../lib/character';
-import { NUTRITION_WINDOW_DAYS } from '../lib/character';
+import { NUTRITION_WINDOW_DAYS, type Mood } from '../lib/character';
 import { getDailyMacros, getPreviousSets, getWorkoutSummaries, saveWorkout } from '../lib/db';
 import { routineFor, type Exercise } from '../lib/exercises';
 import { moodFrom } from '../lib/mood';
@@ -29,6 +29,7 @@ interface Result {
 }
 
 const XP_FOR_WORKOUT = 50;
+const GLASS = 'rgba(18,14,36,0.8)';
 
 function leave() {
   if (router.canGoBack()) router.back();
@@ -44,8 +45,18 @@ function clock(totalSeconds: number): string {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.stat}>
-      <PixelText size={12} color={colors.inkSoft} weight="bold">{label}</PixelText>
-      <PixelText size={20} weight="bold">{value}</PixelText>
+      <PixelText variant="label" size={9}>{label}</PixelText>
+      <PixelText variant="bold" size={22}>{value}</PixelText>
+    </View>
+  );
+}
+
+function Caption({ text }: { text: string }) {
+  return (
+    <View style={styles.caption}>
+      <PixelFrame fill={GLASS} edge={colors.border} step={2}>
+        <PixelText size={14} style={styles.captionText}>{text}</PixelText>
+      </PixelFrame>
     </View>
   );
 }
@@ -84,18 +95,22 @@ export default function WorkoutScreen() {
 
   if (result) {
     return (
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <AvatarRoom mood="thriving" compact />
-        <PixelPanel title="Workout Complete">
-          <PixelText weight="bold" size={20} style={{ marginBottom: 12 }}>{result.name}</PixelText>
-          <View style={styles.statRow}>
-            <Stat label="TIME" value={formatDuration(result.durationSec) || '1m'} />
-            <Stat label="VOLUME" value={`${formatNumber(result.volume)} kg`} />
-            <Stat label="SETS" value={String(result.sets)} />
-          </View>
-          <PixelText weight="bold" color={colors.mossDark} style={{ marginTop: 14 }}>+{XP_FOR_WORKOUT} XP earned</PixelText>
-        </PixelPanel>
-        <PixelButton label="Done" color={colors.moss} onPress={leave} />
+      <ScrollView style={styles.screen} contentContainerStyle={styles.summary}>
+        <RoomScene mood="thriving" compact>
+          <Caption text="Nice work. See you next session." />
+        </RoomScene>
+        <View style={styles.summaryBody}>
+          <PixelPanel label="Workout complete">
+            <PixelText variant="bold" size={22}>{result.name}</PixelText>
+            <View style={styles.statRow}>
+              <Stat label="Time" value={formatDuration(result.durationSec) || '1m'} />
+              <Stat label="Volume" value={`${formatNumber(result.volume)} kg`} />
+              <Stat label="Sets" value={String(result.sets)} />
+            </View>
+            <PixelText variant="bold" color={colors.amber}>+{XP_FOR_WORKOUT} XP</PixelText>
+          </PixelPanel>
+          <PixelButton label="Done" tone="teal" onPress={leave} />
+        </View>
       </ScrollView>
     );
   }
@@ -139,70 +154,69 @@ export default function WorkoutScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={[styles.content, resting && { paddingBottom: 140 }]} keyboardShouldPersistTaps="handled">
-        <PixelInput label="Workout name" value={workout.name} onChangeText={workoutStore.rename} />
+      <ScrollView contentContainerStyle={[styles.scroll, resting && { paddingBottom: 150 }]} keyboardShouldPersistTaps="handled">
+        <RoomScene mood={mood} activity={activity} compact>
+          <Caption text={caption} />
+        </RoomScene>
 
-        <PixelPanel>
-          <View style={styles.statRow}>
-            <Stat label="DURATION" value={clock(Math.floor((now - workout.startedAt) / 1000))} />
-            <Stat label="VOLUME" value={`${formatNumber(totals.volume)} kg`} />
-            <Stat label="SETS" value={String(totals.sets)} />
+        <View style={styles.body}>
+          <PixelInput label="Workout name" value={workout.name} onChangeText={workoutStore.rename} />
+
+          <PixelPanel>
+            <View style={styles.statRow}>
+              <Stat label="Duration" value={clock(Math.floor((now - workout.startedAt) / 1000))} />
+              <Stat label="Volume" value={`${formatNumber(totals.volume)} kg`} />
+              <Stat label="Sets" value={String(totals.sets)} />
+            </View>
+          </PixelPanel>
+
+          {workout.exercises.map((exercise) => (
+            <ExerciseCard key={exercise.id} exercise={exercise} focused={exercise.id === workout.focusedId} />
+          ))}
+
+          <PixelButton label="Add Exercise" tone="lilac" icon="plus" onPress={() => setPickerOpen(true)} />
+
+          <View style={{ gap: 10 }}>
+            <PixelButton
+              label={saving ? 'Saving...' : `Finish Workout  +${XP_FOR_WORKOUT} XP`}
+              tone="teal"
+              disabled={totals.sets === 0 || saving}
+              onPress={finish}
+            />
+            {totals.sets === 0 ? (
+              <PixelText size={13} color={colors.textFaint} style={styles.hint}>Complete at least one set to finish.</PixelText>
+            ) : unfinishedSets > 0 ? (
+              <PixelText size={13} color={colors.textFaint} style={styles.hint}>
+                {unfinishedSets} unfinished set{unfinishedSets === 1 ? '' : 's'} will be discarded.
+              </PixelText>
+            ) : null}
+            <PixelButton label="Discard Workout" tone="danger" onPress={() => setConfirmDiscard(true)} />
           </View>
-        </PixelPanel>
-
-        <View>
-          <AvatarRoom mood={mood} activity={activity} compact />
-          <View style={styles.caption}>
-            <PixelText size={14} color={colors.parchment}>{caption}</PixelText>
-          </View>
-        </View>
-
-        {workout.exercises.map((exercise) => (
-          <ExerciseCard key={exercise.id} exercise={exercise} focused={exercise.id === workout.focusedId} />
-        ))}
-
-        <PixelButton label="+ Add Exercise" color={colors.sky} onPress={() => setPickerOpen(true)} />
-
-        <View style={{ gap: 14 }}>
-          <PixelButton
-            label={saving ? 'Saving...' : `Finish Workout  +${XP_FOR_WORKOUT} XP`}
-            color={colors.moss}
-            disabled={totals.sets === 0 || saving}
-            onPress={finish}
-          />
-          {totals.sets === 0 ? (
-            <PixelText size={13} color={colors.parchmentDark} style={styles.hint}>Complete at least one set to finish.</PixelText>
-          ) : unfinishedSets > 0 ? (
-            <PixelText size={13} color={colors.parchmentDark} style={styles.hint}>
-              {unfinishedSets} unfinished set{unfinishedSets === 1 ? '' : 's'} will be discarded.
-            </PixelText>
-          ) : null}
-          <PixelButton label="Discard Workout" color={colors.terracotta} onPress={() => setConfirmDiscard(true)} />
         </View>
       </ScrollView>
 
       {resting && restLeft !== null ? (
         <View style={styles.restBar}>
-          <PixelPanel tone="night">
+          <PixelFrame fill={colors.panel} edge={colors.amber} step={3}>
             <View style={styles.restRow}>
               <View>
-                <PixelText size={12} weight="bold" color={colors.butter}>REST</PixelText>
-                <PixelText size={26} weight="bold" color={colors.parchment}>{clock(restLeft)}</PixelText>
+                <PixelText variant="label" size={10} color={colors.amber}>Rest</PixelText>
+                <PixelText variant="bold" size={28}>{clock(restLeft)}</PixelText>
               </View>
               <View style={styles.restButtons}>
-                <PixelButton label="-15" color={colors.parchmentDark} onPress={() => workoutStore.adjustRest(-15)} />
-                <PixelButton label="+15" color={colors.parchmentDark} onPress={() => workoutStore.adjustRest(15)} />
-                <PixelButton label="Skip" color={colors.butter} onPress={() => workoutStore.skipRest()} />
+                <PixelButton label="-15" tone="ghost" onPress={() => workoutStore.adjustRest(-15)} />
+                <PixelButton label="+15" tone="ghost" onPress={() => workoutStore.adjustRest(15)} />
+                <PixelButton label="Skip" tone="amber" onPress={() => workoutStore.skipRest()} />
               </View>
             </View>
-          </PixelPanel>
+          </PixelFrame>
         </View>
       ) : null}
 
       <ExercisePicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onAdd={addExercises} />
       <ConfirmModal
         visible={confirmDiscard}
-        title="Discard Workout"
+        title="Discard workout"
         message="This throws away everything you've logged in this workout."
         confirmLabel="Discard"
         onCancel={() => setConfirmDiscard(false)}
@@ -216,13 +230,17 @@ export default function WorkoutScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.night },
-  content: { padding: 20, paddingTop: 24, paddingBottom: 48, gap: 24 },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  scroll: { paddingBottom: 48 },
+  body: { padding: 16, paddingTop: 20, gap: 18 },
+  summary: { paddingBottom: 48 },
+  summaryBody: { padding: 16, paddingTop: 20, gap: 18 },
   statRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  stat: { gap: 2 },
-  caption: { backgroundColor: colors.ink, paddingVertical: 6, paddingHorizontal: 12 },
+  stat: { gap: 4 },
+  caption: { position: 'absolute', left: 10, right: 10, bottom: 10 },
+  captionText: { paddingHorizontal: 12, paddingVertical: 9 },
   hint: { textAlign: 'center' },
-  restBar: { position: 'absolute', left: 16, right: 16, bottom: 16 },
-  restRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  restButtons: { flexDirection: 'row', gap: 8 },
+  restBar: { position: 'absolute', left: 12, right: 12, bottom: 12 },
+  restRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: 12 },
+  restButtons: { flexDirection: 'row', gap: 8, alignItems: 'center' },
 });
