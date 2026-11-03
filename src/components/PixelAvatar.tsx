@@ -1,97 +1,37 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import Svg, { Rect } from 'react-native-svg';
 import type { Mood } from '../lib/character';
+import { getFrames, SPRITE_H, SPRITE_W, type Activity } from '../lib/sprite';
 
-const COLS = 10;
-const ROWS = 14;
-const PIXEL = 14;
-const EYE = '#2b1f2e';
-
-type Palette = {
-  skin: string;
-  hair: string;
-  shirt: string;
-  pants: string;
-  accent: string;
-};
-
-const PALETTES: Record<Mood, Palette> = {
-  thriving: { skin: '#e8b690', hair: '#4a3728', shirt: '#36c2a4', pants: '#2e4057', accent: '#ffd166' },
-  bulking: { skin: '#e8b690', hair: '#4a3728', shirt: '#6fae8a', pants: '#3a4a3f', accent: '#f2c572' },
-  leanTired: { skin: '#dba87c', hair: '#5a4636', shirt: '#8aa0b0', pants: '#4a5560', accent: '#9aa4ad' },
-  scruffy: { skin: '#cf9e76', hair: '#4a3b2e', shirt: '#7a6a58', pants: '#4a4a46', accent: '#8d8d8d' },
-};
-
-/**
- * Builds a 10x14 pixel grid for a given mood. The same body plan is reused for
- * every mood; only palette, posture (slouched vs upright) and hair (neat vs
- * messy) change, so the four looks stay visually comparable.
- */
-function buildGrid(mood: Mood): (string | null)[][] {
-  const palette = PALETTES[mood];
-  const messy = mood === 'scruffy' || mood === 'leanTired';
-  const armsRaised = mood === 'thriving' || mood === 'bulking';
-  const slouched = mood === 'scruffy' || mood === 'leanTired';
-
-  const grid: (string | null)[][] = Array.from({ length: ROWS }, () => Array<string | null>(COLS).fill(null));
-
-  for (let c = 2; c <= 7; c++) grid[0][c] = palette.hair;
-  if (messy) {
-    grid[1][1] = palette.hair;
-    grid[1][8] = palette.hair;
-  }
-
-  const headRowStart = slouched ? 2 : 1;
-  for (let r = headRowStart; r < headRowStart + 3; r++) {
-    for (let c = 2; c <= 7; c++) grid[r][c] = palette.skin;
-  }
-  grid[headRowStart + 1][3] = EYE;
-  grid[headRowStart + 1][6] = EYE;
-
-  const torsoRowStart = headRowStart + 3;
-  for (let r = torsoRowStart; r < torsoRowStart + 5; r++) {
-    for (let c = 2; c <= 7; c++) grid[r][c] = palette.shirt;
-  }
-
-  const armRowStart = armsRaised ? torsoRowStart - 1 : torsoRowStart;
-  for (let r = armRowStart; r < armRowStart + 4; r++) {
-    if (r >= 0 && r < ROWS) {
-      grid[r][1] = palette.skin;
-      grid[r][8] = palette.skin;
-    }
-  }
-
-  const legRowStart = torsoRowStart + 5;
-  for (let r = legRowStart; r < Math.min(legRowStart + 4, ROWS); r++) {
-    grid[r][3] = palette.pants;
-    grid[r][4] = palette.pants;
-    grid[r][5] = palette.pants;
-    grid[r][6] = palette.pants;
-  }
-
-  grid[0][0] = palette.accent;
-  grid[0][9] = palette.accent;
-
-  return grid;
+interface Props {
+  mood: Mood;
+  activity?: Activity;
+  /** Screen pixels per sprite pixel. */
+  px?: number;
 }
 
-export function PixelAvatar({ mood }: { mood: Mood }) {
-  const grid = buildGrid(mood);
+// Not in react-native-svg's types, but the web build forwards it to the DOM to avoid seams between pixels.
+const CRISP = { shapeRendering: 'crispEdges' } as object;
+
+const IDLE_FRAME_MS = 650;
+const ROUTINE_FRAME_MS = 330;
+
+export function PixelAvatar({ mood, activity = 'idle', px = 6 }: Props) {
+  const frames = getFrames(mood, activity);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), activity === 'idle' ? IDLE_FRAME_MS : ROUTINE_FRAME_MS);
+    return () => clearInterval(id);
+  }, [activity]);
+
+  const frame = frames[tick % frames.length];
+
   return (
-    <View style={styles.wrap}>
-      {grid.map((row, r) => (
-        <View key={r} style={styles.row}>
-          {row.map((color, c) => (
-            <View key={c} style={[styles.pixel, { backgroundColor: color ?? 'transparent' }]} />
-          ))}
-        </View>
+    <Svg width={SPRITE_W * px} height={SPRITE_H * px} viewBox={`0 0 ${SPRITE_W} ${SPRITE_H}`}>
+      {frame.map((r, i) => (
+        <Rect key={i} x={r.x} y={r.y} width={r.w} height={1} fill={r.color} {...CRISP} />
       ))}
-    </View>
+    </Svg>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {},
-  row: { flexDirection: 'row' },
-  pixel: { width: PIXEL, height: PIXEL },
-});

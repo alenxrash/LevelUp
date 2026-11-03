@@ -1,34 +1,47 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { Mood } from '../lib/character';
+import type { Activity } from '../lib/sprite';
 import { BORDER, colors } from '../theme';
 import { PixelAvatar } from './PixelAvatar';
 
 const WALL = '#e6b8a2';
 const FLOOR = '#8a5a44';
 const FLOOR_LINE = '#74483a';
-const RUG = colors.terracotta;
 
-export function AvatarRoom({ mood }: { mood: Mood }) {
+interface Props {
+  mood: Mood;
+  activity?: Activity;
+  /** Shorter room used on the workout screen. */
+  compact?: boolean;
+}
+
+export function AvatarRoom({ mood, activity = 'idle', compact = false }: Props) {
+  const px = compact ? 4 : 6;
+  const floorH = compact ? 52 : 78;
   return (
-    <View style={styles.room}>
-      <View style={styles.window}>
-        <View style={styles.windowCrossV} />
-        <View style={styles.windowCrossH} />
+    <View style={[styles.room, { height: compact ? 210 : 310 }]}>
+      <View style={[styles.window, compact && { width: 52, height: 52, top: 16, left: 16 }]}>
+        <View style={[styles.windowCrossV, compact && { left: 20 }]} />
+        <View style={[styles.windowCrossH, compact && { top: 20 }]} />
       </View>
 
-      <View style={styles.floor}>
+      <View style={[styles.floor, { height: floorH }]}>
         <View style={styles.plankLine} />
-        <View style={[styles.plankLine, { top: 38 }]} />
+        <View style={[styles.plankLine, { top: compact ? 32 : 38 }]} />
       </View>
 
-      <View style={styles.plantPot} />
-      <View style={styles.plantLeafL} />
-      <View style={styles.plantLeafR} />
+      {!compact && (
+        <>
+          <View style={styles.plantPot} />
+          <View style={styles.plantLeafL} />
+          <View style={styles.plantLeafR} />
+        </>
+      )}
 
-      <View style={styles.rug} />
-      <View style={styles.avatar}>
-        <PixelAvatar mood={mood} />
+      <View style={[styles.rug, { bottom: compact ? 8 : 12, width: compact ? 130 : 190, height: compact ? 18 : 26 }]} />
+      <View style={{ position: 'absolute', bottom: compact ? 16 : 22 }}>
+        <PixelAvatar mood={mood} activity={activity} px={px} />
       </View>
     </View>
   );
@@ -36,7 +49,6 @@ export function AvatarRoom({ mood }: { mood: Mood }) {
 
 const styles = StyleSheet.create({
   room: {
-    height: 290,
     backgroundColor: WALL,
     borderWidth: BORDER,
     borderColor: colors.ink,
@@ -60,7 +72,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 78,
     backgroundColor: FLOOR,
     borderTopWidth: BORDER,
     borderColor: colors.ink,
@@ -68,17 +79,13 @@ const styles = StyleSheet.create({
   plankLine: { position: 'absolute', left: 0, right: 0, top: 18, height: 2, backgroundColor: FLOOR_LINE },
   rug: {
     position: 'absolute',
-    bottom: 12,
-    width: 190,
-    height: 26,
-    backgroundColor: RUG,
+    backgroundColor: colors.terracotta,
     borderWidth: 2,
     borderColor: colors.ink,
   },
-  avatar: { position: 'absolute', bottom: 22 },
   plantPot: {
     position: 'absolute',
-    right: 28,
+    right: 20,
     bottom: 56,
     width: 28,
     height: 22,
@@ -88,7 +95,7 @@ const styles = StyleSheet.create({
   },
   plantLeafL: {
     position: 'absolute',
-    right: 46,
+    right: 38,
     bottom: 78,
     width: 12,
     height: 24,
@@ -98,7 +105,7 @@ const styles = StyleSheet.create({
   },
   plantLeafR: {
     position: 'absolute',
-    right: 28,
+    right: 20,
     bottom: 78,
     width: 12,
     height: 32,

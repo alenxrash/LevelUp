@@ -35,7 +35,7 @@ export default function RootLayout() {
             }}
           >
             <Stack.Screen name="index" options={{ title: 'LevelUp' }} />
-            <Stack.Screen name="log-workout" options={{ title: 'Log Workout', presentation: 'modal' }} />
+            <Stack.Screen name="workout" options={{ title: 'Workout', presentation: 'modal' }} />
             <Stack.Screen name="log-meal" options={{ title: 'Log Meal', presentation: 'modal' }} />
           </Stack>
           <StatusBar style="light" />

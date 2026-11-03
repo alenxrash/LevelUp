@@ -1,60 +1,51 @@
 import React, { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useSQLiteContext, type SQLiteDatabase } from 'expo-sqlite';
 import { AvatarRoom } from '../components/AvatarRoom';
+import { formatNumber, WorkoutCalendarWidget } from '../components/CalendarWidget';
 import { MacroBars } from '../components/MacroBars';
 import { PixelButton } from '../components/PixelButton';
 import { PixelPanel } from '../components/PixelPanel';
 import { PixelText } from '../components/PixelText';
 import { SegmentBar } from '../components/SegmentBar';
-import { WorkoutCalendar } from '../components/WorkoutCalendar';
-import {
-  computeMood,
-  isNutritionOnTarget,
-  isWorkoutConsistent,
-  MOOD_BLURB,
-  MOOD_LABEL,
-  NUTRITION_WINDOW_DAYS,
-} from '../lib/character';
-import { toDayKey, addDays } from '../lib/dates';
+import { useActiveWorkout, workoutStore } from '../lib/activeWorkout';
+import { MOOD_BLURB, MOOD_LABEL, NUTRITION_WINDOW_DAYS, type Mood } from '../lib/character';
+import { toDayKey } from '../lib/dates';
 import {
   getActiveDayKeys,
   getCounts,
   getDailyMacros,
-  getLastWorkoutDate,
-  getWorkoutDayKeys,
+  getWorkoutSummaries,
   type Macros,
+  type WorkoutSummary,
 } from '../lib/db';
+import { moodFrom } from '../lib/mood';
 import { computeLevel, computeStreak, type Level } from '../lib/progress';
-import { DAILY_TARGETS } from '../lib/targets';
 import { colors } from '../theme';
 
 interface DashboardData {
-  lastWorkout: Date | null;
-  workoutDays: Set<string>;
+  mood: Mood;
+  summaries: WorkoutSummary[];
   today: Macros;
-  recentEnergy: number[];
   level: Level;
   streak: number;
 }
 
 const EMPTY_MACROS: Macros = { energy: 0, carbs: 0, protein: 0 };
 
-async function loadDashboard(db: ReturnType<typeof useSQLiteContext>): Promise<DashboardData> {
+async function loadDashboard(db: SQLiteDatabase): Promise<DashboardData> {
   const now = new Date();
-  const [lastWorkout, workoutDays, activeDays, counts, daily] = await Promise.all([
-    getLastWorkoutDate(db),
-    getWorkoutDayKeys(db),
+  const [summaries, activeDays, counts, daily] = await Promise.all([
+    getWorkoutSummaries(db),
     getActiveDayKeys(db),
     getCounts(db),
     getDailyMacros(db, NUTRITION_WINDOW_DAYS, now),
   ]);
   return {
-    lastWorkout,
-    workoutDays,
+    mood: moodFrom(summaries[0] ? new Date(summaries[0].date) : null, daily, now),
+    summaries,
     today: daily.get(toDayKey(now)) ?? EMPTY_MACROS,
-    recentEnergy: Array.from({ length: NUTRITION_WINDOW_DAYS }, (_, i) => daily.get(toDayKey(addDays(now, -i)))?.energy ?? 0),
     level: computeLevel(counts.workouts, counts.meals),
     streak: computeStreak(activeDays, now),
   };
@@ -62,6 +53,7 @@ async function loadDashboard(db: ReturnType<typeof useSQLiteContext>): Promise<D
 
 export default function Home() {
   const db = useSQLiteContext();
+  const activeWorkout = useActiveWorkout();
   const [data, setData] = useState<DashboardData | null>(null);
 
   useFocusEffect(
@@ -78,10 +70,17 @@ export default function Home() {
 
   if (!data) return <View style={styles.screen} />;
 
-  const mood = computeMood({
-    workoutConsistent: isWorkoutConsistent(data.lastWorkout),
-    nutritionOnTarget: isNutritionOnTarget(data.recentEnergy, DAILY_TARGETS.energy),
+  const now = new Date();
+  const thisMonth = data.summaries.filter((s) => {
+    const d = new Date(s.date);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   });
+  const monthVolume = thisMonth.reduce((sum, s) => sum + s.volume, 0);
+
+  function startWorkout() {
+    workoutStore.start();
+    router.push('/workout');
+  }
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -94,30 +93,45 @@ export default function Home() {
             {data.level.xpIntoLevel}/{data.level.xpPerLevel} XP
           </PixelText>
         </View>
-        <PixelText size={14} color={colors.butter} style={styles.streak}>
-          {data.streak > 0 ? `${data.streak}-day streak` : 'Log something today to start a streak'}
-        </PixelText>
       </PixelPanel>
 
       <View>
-        <AvatarRoom mood={mood} />
+        <AvatarRoom mood={data.mood} />
         <View style={styles.moodBanner}>
-          <PixelText weight="bold" size={18} color={colors.parchment}>{MOOD_LABEL[mood]}</PixelText>
-          <PixelText size={14} color={colors.parchmentDark}>{MOOD_BLURB[mood]}</PixelText>
+          <PixelText weight="bold" size={18} color={colors.parchment}>{MOOD_LABEL[data.mood]}</PixelText>
+          <PixelText size={14} color={colors.parchmentDark}>{MOOD_BLURB[data.mood]}</PixelText>
         </View>
       </View>
 
       <View style={styles.buttonRow}>
-        <PixelButton label="Log Workout" color={colors.moss} onPress={() => router.push('/log-workout')} style={{ flex: 1 }} />
+        <PixelButton
+          label={activeWorkout ? 'Resume Workout' : 'Start Workout'}
+          color={colors.moss}
+          onPress={startWorkout}
+          style={{ flex: 1 }}
+        />
         <PixelButton label="Log Meal" color={colors.butter} onPress={() => router.push('/log-meal')} style={{ flex: 1 }} />
+      </View>
+
+      <View style={styles.widgetRow}>
+        <PixelPanel title="Training" style={{ flex: 1.55 }}>
+          <WorkoutCalendarWidget summaries={data.summaries} />
+        </PixelPanel>
+        <View style={styles.widgetColumn}>
+          <PixelPanel title="Streak">
+            <PixelText weight="bold" size={30} color={colors.terracotta}>{data.streak}</PixelText>
+            <PixelText size={13} color={colors.inkSoft}>{data.streak === 1 ? 'day' : 'days'} in a row</PixelText>
+          </PixelPanel>
+          <PixelPanel title="This Month">
+            <PixelText weight="bold" size={30} color={colors.mossDark}>{thisMonth.length}</PixelText>
+            <PixelText size={13} color={colors.inkSoft}>workouts</PixelText>
+            <PixelText size={13} color={colors.inkSoft}>{formatNumber(monthVolume)} kg lifted</PixelText>
+          </PixelPanel>
+        </View>
       </View>
 
       <PixelPanel title="Today's Fuel">
         <MacroBars today={data.today} />
-      </PixelPanel>
-
-      <PixelPanel title="Training Log">
-        <WorkoutCalendar workoutDays={data.workoutDays} />
       </PixelPanel>
     </ScrollView>
   );
@@ -127,12 +141,8 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.night },
   content: { padding: 20, paddingTop: 28, paddingBottom: 48, gap: 28 },
   levelRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  streak: { marginTop: 8 },
-  moodBanner: {
-    backgroundColor: colors.ink,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    gap: 2,
-  },
+  moodBanner: { backgroundColor: colors.ink, paddingVertical: 8, paddingHorizontal: 12, gap: 2 },
   buttonRow: { flexDirection: 'row', gap: 16 },
+  widgetRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  widgetColumn: { flex: 1, gap: 24 },
 });

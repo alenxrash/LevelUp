@@ -3,19 +3,29 @@ import { addDays, toDayKey } from './dates';
 
 export const DATABASE_NAME = 'levelup.db';
 
+async function addColumnIfMissing(db: SQLiteDatabase, table: string, column: string, type: string) {
+  const cols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
+  if (!cols.some((c) => c.name === column)) {
+    await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+}
+
 export async function initDatabase(db: SQLiteDatabase): Promise<void> {
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS workout_sessions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      date TEXT NOT NULL
+      date TEXT NOT NULL,
+      name TEXT,
+      duration INTEGER
     );
     CREATE TABLE IF NOT EXISTS workout_sets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       session_id INTEGER NOT NULL REFERENCES workout_sessions(id),
       exercise TEXT NOT NULL,
       weight REAL NOT NULL,
-      reps INTEGER NOT NULL
+      reps INTEGER NOT NULL,
+      set_index INTEGER
     );
     CREATE TABLE IF NOT EXISTS meals (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,28 +36,83 @@ export async function initDatabase(db: SQLiteDatabase): Promise<void> {
       protein REAL NOT NULL
     );
   `);
+  // Databases created by earlier builds lack these columns.
+  await addColumnIfMissing(db, 'workout_sessions', 'name', 'TEXT');
+  await addColumnIfMissing(db, 'workout_sessions', 'duration', 'INTEGER');
+  await addColumnIfMissing(db, 'workout_sets', 'set_index', 'INTEGER');
 }
 
-export interface WorkoutSetInput {
-  exercise: string;
-  weight: number;
-  reps: number;
+export interface FinishedWorkout {
+  name: string;
+  startedAt: Date;
+  durationSec: number;
+  exercises: { name: string; sets: { weight: number; reps: number }[] }[];
 }
 
-export async function saveWorkoutSession(db: SQLiteDatabase, sets: WorkoutSetInput[]): Promise<void> {
+export async function saveWorkout(db: SQLiteDatabase, workout: FinishedWorkout): Promise<void> {
   await db.withTransactionAsync(async () => {
-    const result = await db.runAsync('INSERT INTO workout_sessions (date) VALUES (?)', new Date().toISOString());
+    const result = await db.runAsync(
+      'INSERT INTO workout_sessions (date, name, duration) VALUES (?, ?, ?)',
+      workout.startedAt.toISOString(),
+      workout.name,
+      workout.durationSec
+    );
     const sessionId = result.lastInsertRowId;
-    for (const set of sets) {
-      await db.runAsync(
-        'INSERT INTO workout_sets (session_id, exercise, weight, reps) VALUES (?, ?, ?, ?)',
-        sessionId,
-        set.exercise,
-        set.weight,
-        set.reps
-      );
+    for (const exercise of workout.exercises) {
+      for (const [index, set] of exercise.sets.entries()) {
+        await db.runAsync(
+          'INSERT INTO workout_sets (session_id, exercise, weight, reps, set_index) VALUES (?, ?, ?, ?, ?)',
+          sessionId,
+          exercise.name,
+          set.weight,
+          set.reps,
+          index
+        );
+      }
     }
   });
+}
+
+/** The sets from the most recent session that included this exercise, in order. */
+export async function getPreviousSets(db: SQLiteDatabase, exercise: string): Promise<{ weight: number; reps: number }[]> {
+  const last = await db.getFirstAsync<{ session_id: number }>(
+    `SELECT ws.session_id FROM workout_sets ws
+     JOIN workout_sessions s ON s.id = ws.session_id
+     WHERE ws.exercise = ? ORDER BY s.date DESC LIMIT 1`,
+    exercise
+  );
+  if (!last) return [];
+  return db.getAllAsync<{ weight: number; reps: number }>(
+    'SELECT weight, reps FROM workout_sets WHERE session_id = ? AND exercise = ? ORDER BY COALESCE(set_index, id), id',
+    last.session_id,
+    exercise
+  );
+}
+
+export interface WorkoutSummary {
+  id: number;
+  date: string;
+  name: string | null;
+  durationSec: number | null;
+  sets: number;
+  volume: number;
+}
+
+export async function getWorkoutSummaries(db: SQLiteDatabase): Promise<WorkoutSummary[]> {
+  const rows = await db.getAllAsync<{
+    id: number;
+    date: string;
+    name: string | null;
+    duration: number | null;
+    sets: number;
+    volume: number;
+  }>(
+    `SELECT s.id, s.date, s.name, s.duration,
+            COUNT(ws.id) AS sets, COALESCE(SUM(ws.weight * ws.reps), 0) AS volume
+     FROM workout_sessions s LEFT JOIN workout_sets ws ON ws.session_id = s.id
+     GROUP BY s.id ORDER BY s.date DESC`
+  );
+  return rows.map((r) => ({ id: r.id, date: r.date, name: r.name, durationSec: r.duration, sets: r.sets, volume: r.volume }));
 }
 
 export interface MealInput {
@@ -111,17 +176,6 @@ export async function getTodaysMeals(db: SQLiteDatabase, now = new Date()): Prom
   );
   const today = toDayKey(now);
   return rows.filter((r) => toDayKey(new Date(r.date)) === today);
-}
-
-export async function getLastWorkoutDate(db: SQLiteDatabase): Promise<Date | null> {
-  const row = await db.getFirstAsync<{ date: string }>('SELECT date FROM workout_sessions ORDER BY date DESC LIMIT 1');
-  return row ? new Date(row.date) : null;
-}
-
-/** Local day keys with at least one workout, for the whole history (cheap: one short string per session). */
-export async function getWorkoutDayKeys(db: SQLiteDatabase): Promise<Set<string>> {
-  const rows = await db.getAllAsync<{ date: string }>('SELECT date FROM workout_sessions');
-  return new Set(rows.map((r) => toDayKey(new Date(r.date))));
 }
 
 /** Local day keys with any logged activity (workout or meal). */
