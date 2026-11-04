@@ -32,7 +32,7 @@ interface Props {
 export function PixelButton({ label, onPress, tone = 'amber', icon, tile, disabled, style }: Props) {
   const t = TONES[tone];
   return (
-    <Pressable onPress={onPress} disabled={disabled} style={[{ marginBottom: LIP }, disabled && styles.disabled, style]}>
+    <Pressable accessibilityRole="button" accessibilityState={{ disabled: !!disabled }} onPress={onPress} disabled={disabled} style={[{ marginBottom: LIP }, disabled && styles.disabled, style]}>
       {({ pressed }) => (
         <PixelFrame
           fill={t.fill}

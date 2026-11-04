@@ -147,6 +147,7 @@ export default function Home() {
 
         <PixelPanel label="Today's fuel">
           <MacroJars today={data.today} />
+          <PixelButton label="Open cookbook" tone="ghost" icon="bowl" onPress={() => router.push('/cookbook')} />
         </PixelPanel>
 
         <View style={styles.widgets}>

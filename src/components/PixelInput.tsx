@@ -13,7 +13,7 @@ export function PixelInput({ label, style, ...rest }: Props) {
     <View style={styles.field}>
       {label ? <PixelText variant="label" size={10}>{label}</PixelText> : null}
       <PixelFrame fill={colors.panelDeep} edge={colors.border} step={2}>
-        <TextInput placeholderTextColor={colors.textFaint} {...rest} style={[styles.input, style]} />
+        <TextInput accessibilityLabel={label} placeholderTextColor={colors.textFaint} {...rest} style={[styles.input, style]} />
       </PixelFrame>
     </View>
   );

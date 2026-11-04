@@ -40,6 +40,13 @@ export async function initDatabase(db: SQLiteDatabase): Promise<void> {
   await addColumnIfMissing(db, 'workout_sessions', 'name', 'TEXT');
   await addColumnIfMissing(db, 'workout_sessions', 'duration', 'INTEGER');
   await addColumnIfMissing(db, 'workout_sets', 'set_index', 'INTEGER');
+  await addColumnIfMissing(db, 'meals', 'fat', 'REAL NOT NULL DEFAULT 0');
+  await db.execAsync(`
+    CREATE INDEX IF NOT EXISTS meals_date_idx ON meals(date);
+    CREATE INDEX IF NOT EXISTS workout_sessions_date_idx ON workout_sessions(date);
+    CREATE INDEX IF NOT EXISTS workout_sets_session_idx ON workout_sets(session_id);
+    CREATE INDEX IF NOT EXISTS workout_sets_exercise_idx ON workout_sets(exercise, session_id);
+  `);
 }
 
 export interface FinishedWorkout {
@@ -120,6 +127,7 @@ export interface MealInput {
   energy: number;
   carbs: number;
   protein: number;
+  fat?: number;
 }
 
 export interface MealEntry extends MealInput {
@@ -128,13 +136,18 @@ export interface MealEntry extends MealInput {
 }
 
 export async function saveMeal(db: SQLiteDatabase, meal: MealInput): Promise<void> {
+  const values = [meal.energy, meal.carbs, meal.protein, meal.fat ?? 0];
+  if (!meal.name.trim() || meal.energy <= 0 || values.some((value) => !Number.isFinite(value) || value < 0)) {
+    throw new Error('Enter a meal name, positive energy and non-negative macros.');
+  }
   await db.runAsync(
-    'INSERT INTO meals (date, name, energy, carbs, protein) VALUES (?, ?, ?, ?, ?)',
+    'INSERT INTO meals (date, name, energy, carbs, protein, fat) VALUES (?, ?, ?, ?, ?, ?)',
     new Date().toISOString(),
     meal.name,
     meal.energy,
     meal.carbs,
-    meal.protein
+    meal.protein,
+    meal.fat ?? 0
   );
 }
 
@@ -171,7 +184,7 @@ export async function getDailyMacros(db: SQLiteDatabase, days: number, now = new
 
 export async function getTodaysMeals(db: SQLiteDatabase, now = new Date()): Promise<MealEntry[]> {
   const rows = await db.getAllAsync<MealEntry>(
-    'SELECT id, date, name, energy, carbs, protein FROM meals WHERE date >= ? ORDER BY date DESC',
+    'SELECT id, date, name, energy, carbs, protein, fat FROM meals WHERE date >= ? ORDER BY date DESC',
     addDays(now, -1).toISOString()
   );
   const today = toDayKey(now);
