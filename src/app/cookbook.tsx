@@ -1,11 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PixelInput } from '../components/PixelInput';
 import { PixelText } from '../components/PixelText';
-import { RecipeBook } from '../components/RecipeBook';
-import { recipes } from '../lib/recipes';
+import { FoodSprite } from '../components/FoodSprite';
+import { PixelButton } from '../components/PixelButton';
+import { TagPicker } from '../components/TagPicker';
+import { useSQLiteContext } from 'expo-sqlite';
+import { getRecipes, getTags, type Recipe } from '../lib/recipes';
 import { colors } from '../theme';
 
 const filters = ['All recipes', 'High protein', 'Under 450 kcal', 'Quick bites'] as const;
@@ -13,12 +16,29 @@ type Filter = typeof filters[number];
 
 export default function Cookbook() {
   const insets = useSafeAreaInsets();
+  const db = useSQLiteContext();
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  useFocusEffect(useCallback(() => {
+    void attempt; // Retry explicitly reruns this focus subscription.
+    let active = true;
+    setLoading(true); setError('');
+    Promise.all([getRecipes(db), getTags(db)]).then(([items, allTags]) => {
+      if (active) { setRecipes(items); setTags(allTags); }
+    }).catch(() => { if (active) setError('Could not load your cookbook. Please retry.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [db, attempt]));
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('All recipes');
   const filtered = useMemo(() => recipes.filter((recipe) => {
-    const matches = `${recipe.name} ${recipe.category} ${recipe.ingredients.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase());
-    return matches && (filter === 'All recipes' || (filter === 'High protein' && recipe.protein >= 30) || (filter === 'Under 450 kcal' && recipe.energy < 450) || (filter === 'Quick bites' && recipe.minutes <= 10));
-  }), [query, filter]);
+    const matches = `${recipe.name} ${recipe.tags.join(' ')} ${recipe.ingredients.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase());
+    return matches && selectedTags.every((tag) => recipe.tags.includes(tag)) && (filter === 'All recipes' || (filter === 'High protein' && recipe.protein >= 30) || (filter === 'Under 450 kcal' && recipe.energy < 450) || (filter === 'Quick bites' && recipe.minutes <= 10));
+  }), [recipes, query, filter, selectedTags]);
 
   return (
     <FlatList
@@ -36,31 +56,36 @@ export default function Cookbook() {
             <PixelText variant="bold" size={34}>Your cookbook</PixelText>
             <PixelText size={17} color={colors.textDim}>Good food. More fuel. Next level.</PixelText>
           </View>
-          <RecipeBook color="#9b68ba" size={64} />
+          <FoodSprite icon="carrot" size={64} />
         </View>
+        <PixelButton label="Add recipe" icon="plus" tone="teal" onPress={() => router.push('/recipe-editor')} />
+        {error ? <><PixelText accessibilityRole="alert" color={colors.danger}>{error}</PixelText><PixelButton label="Retry" onPress={() => setAttempt((n) => n + 1)} /></> : null}
         <PixelInput accessibilityLabel="Search recipes or ingredients" placeholder="Search a recipe or ingredient..." value={query} onChangeText={setQuery} autoCorrect={false} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
           {filters.map((item) => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: filter === item }} onPress={() => setFilter(item)} style={[styles.filter, filter === item && styles.activeFilter]}>
             <PixelText size={14} color={filter === item ? colors.paperInk : colors.textDim}>{item}</PixelText>
           </Pressable>)}
         </ScrollView>
+        <PixelText size={14} color={colors.textDim}>Filter by food tags (matches all selected)</PixelText>
+        <TagPicker tags={tags} selected={selectedTags} onToggle={(tag) => setSelectedTags((all) => all.includes(tag) ? all.filter((t) => t !== tag) : [...all, tag])} />
+        {selectedTags.length ? <PixelButton label="Clear tags" tone="ghost" onPress={() => setSelectedTags([])} /> : null}
         <View style={styles.shelfLabel}><PixelText variant="label" size={10} color={colors.amber}>THE RECIPE SHELF</PixelText><PixelText color={colors.textDim}>{filtered.length} recipes</PixelText></View>
       </View>}
       renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={`${item.name}, ${item.energy} calories, ${item.protein} grams protein. Open recipe.`} onPress={() => router.push({ pathname: '/recipe', params: { id: item.id } })} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-        <View style={[styles.cover, { borderBottomColor: item.color }]}>
-          <PixelText variant="label" size={9} color={colors.textDim}>{item.category}</PixelText>
-          <RecipeBook color={item.color} />
+        <View style={[styles.cover, { borderBottomColor: colors.teal }]}>
+          <PixelText variant="label" size={9} color={colors.textDim}>{item.tags[0] ?? 'Homemade'}</PixelText>
+          <FoodSprite icon={item.icon} />
           <PixelText size={13} color={colors.textDim}>{item.minutes} MIN PREP</PixelText>
         </View>
         <View style={styles.cardCopy}>
           <PixelText variant="bold" size={20}>{item.name}</PixelText>
-          <PixelText size={13} color={colors.textDim}>{item.subtitle}</PixelText>
+          <PixelText size={13} color={colors.textDim}>{item.tags.join(' / ') || 'Your own recipe'}</PixelText>
           <PixelText size={16} color={colors.amber}>{item.energy} kcal</PixelText>
           <PixelText size={13} color={colors.teal}>P {item.protein}g  ·  C {item.carbs}g  ·  F {item.fat}g</PixelText>
           <PixelText variant="label" size={9} color={colors.textDim}>OPEN RECIPE →</PixelText>
         </View>
       </Pressable>}
-      ListEmptyComponent={<View style={styles.empty}><PixelText size={22}>No recipes on this shelf</PixelText><PixelText color={colors.textDim}>Try another ingredient or select All recipes.</PixelText></View>}
+      ListEmptyComponent={<View style={styles.empty}><PixelText size={22}>{loading ? 'Loading recipes...' : recipes.length ? 'No matching recipes' : 'Your cookbook starts here'}</PixelText><PixelText color={colors.textDim}>{recipes.length ? 'Try another search or clear your filters.' : 'Tap Add recipe to save your first favourite with macros, tags and a video link.'}</PixelText></View>}
       ListFooterComponent={<PixelText style={styles.footer} size={13} color={colors.textDim}>Made for your everyday quests. Macros are estimates per serving; brands and preparation may vary.</PixelText>}
     />
   );

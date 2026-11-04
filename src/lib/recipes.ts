@@ -1,40 +1,71 @@
+import type { SQLiteDatabase } from 'expo-sqlite';
+
+export const foodIcons = ['stew', 'chicken', 'beef', 'fish', 'carrot', 'bread'] as const;
+export type FoodIcon = typeof foodIcons[number];
+export const starterTags = ['soup', 'curry', 'stew', 'japanese', 'korean', 'beef', 'chicken', 'seafood', 'quickmeal'];
 export interface Recipe {
   id: string;
   name: string;
-  subtitle: string;
-  category: 'Breakfast' | 'Lunch' | 'Dinner';
   minutes: number;
-  color: string;
+  icon: FoodIcon;
   energy: number;
   protein: number;
   carbs: number;
   fat: number;
   ingredients: string[];
   steps: string[];
+  tags: string[];
+  tiktokUrl: string;
 }
-
-/** Curated offline recipes. Quantities and estimated macros are for one serving. */
-export const recipes: Recipe[] = [
-  { id: 'sunrise-oats', name: 'Sunrise oats', subtitle: 'A little morning magic', category: 'Breakfast', minutes: 5, color: '#9b68ba', energy: 410, protein: 27, carbs: 53, fat: 10,
-    ingredients: ['45 g rolled oats', '170 g plain Greek yoghurt', '80 ml milk', '80 g mixed berries', '10 g chia seeds'],
-    steps: ['Stir the oats, yoghurt, milk and chia seeds together in a jar.', 'Cover and refrigerate overnight (at least 4 hours).', 'Top with the berries before eating. Prep time excludes chilling.'] },
-  { id: 'chicken-rice', name: 'Power bowl', subtitle: 'The adventurer’s staple', category: 'Lunch', minutes: 25, color: '#b74a65', energy: 540, protein: 48, carbs: 53, fat: 15,
-    ingredients: ['140 g cooked chicken breast', '150 g cooked brown rice', '100 g broccoli', '50 g avocado', '1 tsp olive oil', 'Lemon juice, salt and pepper'],
-    steps: ['Steam the broccoli until tender.', 'Warm the cooked chicken and rice until hot throughout.', 'Add everything to a bowl. Top with sliced avocado, olive oil and lemon. Season to taste.'] },
-  { id: 'garden-chickpeas', name: 'Garden harvest', subtitle: 'Fresh fuel from the garden', category: 'Lunch', minutes: 10, color: '#438f80', energy: 430, protein: 18, carbs: 54, fat: 16,
-    ingredients: ['150 g drained canned chickpeas', '100 g cucumber', '100 g tomatoes', '40 g feta', '1 tsp olive oil', 'Lemon juice and fresh parsley'],
-    steps: ['Rinse and drain the chickpeas.', 'Dice the cucumber and tomatoes, then toss with the chickpeas.', 'Crumble over the feta. Dress with oil, lemon and chopped parsley.'] },
-  { id: 'salmon-supper', name: 'Moonlit salmon', subtitle: 'A well-earned evening feast', category: 'Dinner', minutes: 30, color: '#477ba6', energy: 570, protein: 39, carbs: 51, fat: 24,
-    ingredients: ['150 g salmon fillet', '250 g potatoes', '100 g green beans', '1 tsp olive oil', 'Lemon, dill and black pepper'],
-    steps: ['Heat the oven to 200°C. Cut the potatoes into small cubes and toss with the oil.', 'Roast the potatoes for 15 minutes. Add salmon and roast for a further 12–15 minutes, until cooked through.', 'Steam the beans until tender. Serve with the salmon, potatoes, lemon and dill.'] },
-  { id: 'tofu-noodles', name: 'Ember noodles', subtitle: 'A plant-powered restore', category: 'Dinner', minutes: 20, color: '#b9763f', energy: 510, protein: 30, carbs: 57, fat: 18,
-    ingredients: ['180 g firm tofu', '60 g dry rice noodles', '150 g mixed stir-fry vegetables', '1 tsp sesame oil', '1 tbsp soy sauce', 'Ginger and garlic to taste'],
-    steps: ['Cook the noodles according to their packet instructions, then drain.', 'Pat the tofu dry and cube. Fry in sesame oil until golden.', 'Add vegetables, ginger and garlic. Stir-fry until tender, then toss with noodles and soy sauce.'] },
-  { id: 'egg-toast', name: 'Golden toast', subtitle: 'Your first quest of the day', category: 'Breakfast', minutes: 10, color: '#bf8f3d', energy: 390, protein: 24, carbs: 35, fat: 17,
-    ingredients: ['2 eggs', '2 slices wholegrain bread (70 g)', '50 g baby spinach', '50 g tomatoes', 'Salt and pepper'],
-    steps: ['Toast the bread and slice the tomatoes.', 'Wilt the spinach in a non-stick pan with a splash of water.', 'Whisk the eggs, add to the pan and gently scramble until set. Serve over toast with the tomatoes.'] },
-];
-
-export function recipeMacros(recipe: Recipe, servings: number) {
+export type RecipeInput = Omit<Recipe, 'id'>;
+export function normalizeTag(value: string) { return value.trim().toLowerCase().replace(/\s+/g, ' '); }
+export function validateTikTok(value: string): string {
+  if (!value.trim()) return '';
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== 'https:' || !(url.hostname === 'tiktok.com' || url.hostname.endsWith('.tiktok.com')) || url.username || url.password) throw new Error();
+    return url.toString();
+  } catch { throw new Error('Enter a full https:// TikTok link (including short share links).'); }
+}
+export async function initCookbook(db: SQLiteDatabase) {
+  await db.execAsync(`CREATE TABLE IF NOT EXISTS recipes (id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS food_tags (name TEXT PRIMARY KEY NOT NULL);`);
+  for (const tag of starterTags) await db.runAsync('INSERT OR IGNORE INTO food_tags (name) VALUES (?)', tag);
+}
+export async function getRecipes(db: SQLiteDatabase): Promise<Recipe[]> {
+  const rows = await db.getAllAsync<{ id: number; data: string }>('SELECT id, data FROM recipes ORDER BY id DESC');
+  return rows.map((row) => ({ ...JSON.parse(row.data), id: String(row.id) }));
+}
+export async function getRecipe(db: SQLiteDatabase, id: string): Promise<Recipe | null> {
+  const row = await db.getFirstAsync<{ id: number; data: string }>('SELECT id, data FROM recipes WHERE id = ?', id);
+  return row ? { ...JSON.parse(row.data), id: String(row.id) } : null;
+}
+export async function getTags(db: SQLiteDatabase): Promise<string[]> {
+  const rows = await db.getAllAsync<{ name: string }>('SELECT name FROM food_tags ORDER BY name');
+  return rows.map((row) => row.name);
+}
+export async function createTag(db: SQLiteDatabase, value: string) {
+  const tag = normalizeTag(value);
+  if (!tag || tag.length > 32) throw new Error('Tags need between 1 and 32 characters.');
+  await db.runAsync('INSERT OR IGNORE INTO food_tags (name) VALUES (?)', tag);
+  return tag;
+}
+export async function saveRecipe(db: SQLiteDatabase, input: RecipeInput, id?: string): Promise<string> {
+  if (!input.name.trim()) throw new Error('Give your recipe a name.');
+  if (input.energy <= 0 || [input.energy, input.protein, input.carbs, input.fat, input.minutes].some((n) => !Number.isFinite(n) || n < 0)) throw new Error('Enter positive calories and non-negative macros and prep time.');
+  if (!input.ingredients.length || !input.steps.length) throw new Error('Add at least one ingredient and one cooking step.');
+  const tags = [...new Set(input.tags.map(normalizeTag))];
+  if (tags.some((tag) => !tag || tag.length > 32)) throw new Error('Tags need between 1 and 32 characters.');
+  const data: RecipeInput = { ...input, name: input.name.trim(), tags, tiktokUrl: validateTikTok(input.tiktokUrl) };
+  for (const tag of tags) await createTag(db, tag);
+  if (id) {
+    const result = await db.runAsync('UPDATE recipes SET data = ? WHERE id = ?', JSON.stringify(data), id);
+    if (!result.changes) throw new Error('This recipe no longer exists.');
+    return id;
+  }
+  const result = await db.runAsync('INSERT INTO recipes (data) VALUES (?)', JSON.stringify(data));
+  return String(result.lastInsertRowId);
+}
+export function recipeMacros(recipe: RecipeInput, servings: number) {
   return { energy: Math.round(recipe.energy * servings), protein: Math.round(recipe.protein * servings), carbs: Math.round(recipe.carbs * servings), fat: Math.round(recipe.fat * servings) };
 }

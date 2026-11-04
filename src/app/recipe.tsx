@@ -1,18 +1,20 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PixelButton } from '../components/PixelButton';
 import { PixelText } from '../components/PixelText';
-import { RecipeBook } from '../components/RecipeBook';
+import { FoodSprite } from '../components/FoodSprite';
+import * as Linking from 'expo-linking';
 import { saveMeal } from '../lib/db';
-import { recipeMacros, recipes } from '../lib/recipes';
+import { recipeMacros, getRecipe, validateTikTok, type Recipe } from '../lib/recipes';
 import { colors } from '../theme';
 
 export default function RecipeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const recipe = recipes.find((item) => item.id === id);
+  const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const [loading, setLoading] = useState(true);
   const db = useSQLiteContext();
   const insets = useSafeAreaInsets();
   const [servings, setServings] = useState(1);
@@ -20,7 +22,16 @@ export default function RecipeScreen() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const lock = useRef(false);
-  if (!recipe) return <View style={styles.content}><PixelText>Recipe not found.</PixelText><PixelButton label="Back to cookbook" onPress={() => router.replace('/cookbook')} /></View>;
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    setLoading(true); setError('');
+    getRecipe(db, id).then((item) => { if (active) setRecipe(item); })
+      .catch(() => { if (active) setError('Could not load recipe. Go back and reopen it to retry.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [db, id]));
+  if (loading) return <View style={styles.content}><PixelText>Loading recipe...</PixelText></View>;
+  if (!recipe) return <View style={styles.content}><PixelText>{error || 'Recipe not found.'}</PixelText><PixelButton label="Back to cookbook" onPress={() => router.replace('/cookbook')} /></View>;
   const macros = recipeMacros(recipe, servings);
 
   async function logRecipe() {
@@ -39,17 +50,22 @@ export default function RecipeScreen() {
 
   return <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
     <View style={styles.title}>
-      <RecipeBook color={recipe.color} size={80} />
-      <View style={styles.titleCopy}><PixelText variant="label" size={10} color={colors.amber}>{recipe.category} · {recipe.minutes} min prep</PixelText><PixelText variant="bold" size={30}>{recipe.name}</PixelText><PixelText color={colors.textDim}>{recipe.subtitle}</PixelText></View>
+      <FoodSprite icon={recipe.icon} size={80} />
+      <View style={styles.titleCopy}><PixelText variant="label" size={10} color={colors.amber}>{recipe.tags[0] ?? 'Homemade'} · {recipe.minutes} min prep</PixelText><PixelText variant="bold" size={30}>{recipe.name}</PixelText><PixelText color={colors.textDim}>{recipe.tags.join(' / ')}</PixelText></View>
     </View>
+    <PixelButton label="Edit recipe" tone="ghost" disabled={saving} onPress={() => router.push({ pathname: '/recipe-editor', params: { id: recipe.id } })} />
+    {recipe.tiktokUrl ? <PixelButton label="Watch on TikTok" tone="teal" onPress={() => {
+      try { const link = validateTikTok(recipe.tiktokUrl); Linking.openURL(link).catch(() => setError('Could not open TikTok. Please try again.')); }
+      catch { setError('This TikTok link is invalid. Edit the recipe to replace it.'); }
+    }} /> : null}
     <View style={styles.paper}>
       <PixelText variant="label" size={11} color={colors.paperInk}>RECIPE NOTES / 01</PixelText>
       <PixelText variant="bold" size={26} color={colors.paperInk}>Gather your ingredients</PixelText>
       <PixelText size={14} color={colors.paperInk}>Quantities below make 1 serving.</PixelText>
-      {recipe.ingredients.map((ingredient) => <PixelText key={ingredient} size={18} color={colors.paperInk}>· {ingredient}</PixelText>)}
+      {recipe.ingredients.map((ingredient, index) => <PixelText key={`${index}-${ingredient}`} size={18} color={colors.paperInk}>· {ingredient}</PixelText>)}
       <View style={styles.rule} />
       <PixelText variant="bold" size={26} color={colors.paperInk}>Let’s get cooking</PixelText>
-      {recipe.steps.map((step, index) => <View key={step} style={styles.step}><PixelText variant="bold" size={22} color={colors.paperInk}>{String(index + 1).padStart(2, '0')}</PixelText><PixelText style={styles.stepCopy} size={18} color={colors.paperInk}>{step}</PixelText></View>)}
+      {recipe.steps.map((step, index) => <View key={`${index}-${step}`} style={styles.step}><PixelText variant="bold" size={22} color={colors.paperInk}>{String(index + 1).padStart(2, '0')}</PixelText><PixelText style={styles.stepCopy} size={18} color={colors.paperInk}>{step}</PixelText></View>)}
     </View>
     <View style={styles.fuel}>
       <PixelText variant="label" size={10} color={colors.amber}>LOG YOUR PORTION</PixelText>

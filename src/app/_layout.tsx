@@ -84,6 +84,7 @@ export default function RootLayout() {
             <Stack.Screen name="log-meal" options={{ title: 'Log Meal', presentation: 'modal' }} />
             <Stack.Screen name="cookbook" options={{ title: 'Cookbook' }} />
             <Stack.Screen name="recipe" options={{ title: 'Recipe' }} />
+            <Stack.Screen name="recipe-editor" options={{ title: 'Your recipe' }} />
           </Stack>
           <StatusBar style="light" />
         </SQLiteProvider>

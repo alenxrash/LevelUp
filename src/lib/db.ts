@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { addDays, toDayKey } from './dates';
+import { initCookbook } from './recipes';
 
 export const DATABASE_NAME = 'levelup.db';
 
@@ -11,6 +12,7 @@ async function addColumnIfMissing(db: SQLiteDatabase, table: string, column: str
 }
 
 export async function initDatabase(db: SQLiteDatabase): Promise<void> {
+  await initCookbook(db);
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS workout_sessions (
