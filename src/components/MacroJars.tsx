@@ -2,7 +2,6 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
 import type { Macros } from '../lib/db';
-import { DAILY_TARGETS } from '../lib/targets';
 import { colors } from '../theme';
 import { PixelText } from './PixelText';
 
@@ -46,11 +45,11 @@ interface Item {
   color: string;
 }
 
-export function MacroJars({ today }: { today: Macros }) {
+export function MacroJars({ today, targets }: { today: Macros; targets: Macros }) {
   const items: Item[] = [
-    { label: 'Energy', value: today.energy, target: DAILY_TARGETS.energy, unit: 'kcal', color: colors.amber },
-    { label: 'Carbs', value: today.carbs, target: DAILY_TARGETS.carbs, unit: 'g', color: colors.teal },
-    { label: 'Protein', value: today.protein, target: DAILY_TARGETS.protein, unit: 'g', color: colors.rose },
+    { label: 'Energy', value: today.energy, target: targets.energy, unit: 'kcal', color: colors.amber },
+    { label: 'Carbs', value: today.carbs, target: targets.carbs, unit: 'g', color: colors.teal },
+    { label: 'Protein', value: today.protein, target: targets.protein, unit: 'g', color: colors.rose },
   ];
 
   return (

@@ -80,6 +80,7 @@ export default function RootLayout() {
             }}
           >
             <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="setup" options={{ headerShown: false, gestureEnabled: false }} />
             <Stack.Screen name="workout" options={{ title: 'Workout', presentation: 'modal' }} />
             <Stack.Screen name="log-meal" options={{ title: 'Log Meal', presentation: 'modal' }} />
             <Stack.Screen name="cookbook" options={{ title: 'Cookbook' }} />

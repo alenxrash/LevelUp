@@ -14,10 +14,11 @@ import { PixelText } from '../components/PixelText';
 import { RoomScene } from '../components/RoomScene';
 import { useActiveWorkout, workoutStore, workoutTotals } from '../lib/activeWorkout';
 import { NUTRITION_WINDOW_DAYS, type Mood } from '../lib/character';
-import { getDailyMacros, getPreviousSets, getWorkoutSummaries, saveWorkout } from '../lib/db';
+import { getDailyMacros, getPreviousSets, getProfile, getWorkoutSummaries, saveWorkout } from '../lib/db';
+import { FALLBACK_TARGETS, targetsFor } from '../lib/nutrition';
 import { routineFor, type Exercise } from '../lib/exercises';
-import { moodFrom } from '../lib/mood';
-import { ROUTINE_LABEL, type Activity } from '../lib/sprite';
+import { lastActiveDate, moodFrom } from '../lib/mood';
+import { ROUTINE_LABEL, type Activity, type Gender } from '../lib/sprite';
 import { useNow } from '../lib/useNow';
 import { colors } from '../theme';
 
@@ -66,6 +67,7 @@ export default function WorkoutScreen() {
   const workout = useActiveWorkout();
   const now = useNow(1000);
   const [mood, setMood] = useState<Mood>('thriving');
+  const [gender, setGender] = useState<Gender>('female');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -74,9 +76,14 @@ export default function WorkoutScreen() {
   useEffect(() => {
     let cancelled = false;
     const t = new Date();
-    Promise.all([getWorkoutSummaries(db), getDailyMacros(db, NUTRITION_WINDOW_DAYS, t)]).then(([summaries, daily]) => {
-      if (!cancelled) setMood(moodFrom(summaries[0] ? new Date(summaries[0].date) : null, daily, t));
-    });
+    Promise.all([getWorkoutSummaries(db), getDailyMacros(db, NUTRITION_WINDOW_DAYS, t), getProfile(db)]).then(
+      ([summaries, daily, profile]) => {
+        if (cancelled) return;
+        const energy = profile ? targetsFor(profile).energy : FALLBACK_TARGETS.energy;
+        setMood(moodFrom(lastActiveDate(summaries[0]?.date, profile?.createdAt), daily, energy, t));
+        if (profile) setGender(profile.sex);
+      }
+    );
     return () => {
       cancelled = true;
     };
@@ -96,7 +103,7 @@ export default function WorkoutScreen() {
   if (result) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.summary}>
-        <RoomScene mood="thriving" compact>
+        <RoomScene mood="thriving" gender={gender} scene="gym" compact>
           <Caption text="Nice work. See you next session." />
         </RoomScene>
         <View style={styles.summaryBody}>
@@ -155,7 +162,7 @@ export default function WorkoutScreen() {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={[styles.scroll, resting && { paddingBottom: 150 }]} keyboardShouldPersistTaps="handled">
-        <RoomScene mood={mood} activity={activity} compact>
+        <RoomScene mood={mood} gender={gender} scene="gym" activity={activity} compact>
           <Caption text={caption} />
         </RoomScene>
 
