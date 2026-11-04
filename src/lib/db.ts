@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { addDays, toDayKey } from './dates';
+import type { ActivityLevel, Goal, Profile, Sex } from './nutrition';
 import { initCookbook } from './recipes';
 
 export const DATABASE_NAME = 'levelup.db';
@@ -36,6 +37,17 @@ export async function initDatabase(db: SQLiteDatabase): Promise<void> {
       energy REAL NOT NULL,
       carbs REAL NOT NULL,
       protein REAL NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS profile (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      sex TEXT NOT NULL,
+      age INTEGER NOT NULL,
+      height_cm REAL NOT NULL,
+      weight_kg REAL NOT NULL,
+      activity TEXT NOT NULL,
+      goal TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
   `);
   // Databases created by earlier builds lack these columns.
@@ -205,4 +217,37 @@ export async function getCounts(db: SQLiteDatabase): Promise<{ workouts: number;
   const w = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM workout_sessions');
   const m = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM meals');
   return { workouts: w?.n ?? 0, meals: m?.n ?? 0 };
+}
+
+export type StoredProfile = Profile & { createdAt: string };
+
+export async function getProfile(db: SQLiteDatabase): Promise<StoredProfile | null> {
+  const row = await db.getFirstAsync<{
+    sex: Sex;
+    age: number;
+    height_cm: number;
+    weight_kg: number;
+    activity: ActivityLevel;
+    goal: Goal;
+    created_at: string;
+  }>('SELECT sex, age, height_cm, weight_kg, activity, goal, created_at FROM profile WHERE id = 1');
+  if (!row) return null;
+  return { sex: row.sex, age: row.age, heightCm: row.height_cm, weightKg: row.weight_kg, activity: row.activity, goal: row.goal, createdAt: row.created_at };
+}
+
+export async function saveProfile(db: SQLiteDatabase, p: Profile): Promise<void> {
+  await db.runAsync(
+    `INSERT INTO profile (id, sex, age, height_cm, weight_kg, activity, goal, created_at, updated_at)
+     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET sex = excluded.sex, age = excluded.age, height_cm = excluded.height_cm,
+       weight_kg = excluded.weight_kg, activity = excluded.activity, goal = excluded.goal, updated_at = excluded.updated_at`,
+    p.sex,
+    p.age,
+    p.heightCm,
+    p.weightKg,
+    p.activity,
+    p.goal,
+    new Date().toISOString(),
+    new Date().toISOString()
+  );
 }

@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext, type SQLiteDatabase } from 'expo-sqlite';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,15 +19,22 @@ import {
   getActiveDayKeys,
   getCounts,
   getDailyMacros,
+  getProfile,
   getWorkoutSummaries,
   type Macros,
   type WorkoutSummary,
 } from '../lib/db';
-import { moodFrom } from '../lib/mood';
+import { pickHomeActivity } from '../lib/homeActivity';
+import { lastActiveDate, moodFrom } from '../lib/mood';
+import { targetsFor, type Profile, type Targets } from '../lib/nutrition';
 import { computeLevel, computeStreak, type Level } from '../lib/progress';
+import { phaseFor } from '../lib/scene';
+import { HOME_ACTIVITY_LABEL, type HomeActivity } from '../lib/sprite';
 import { colors } from '../theme';
 
 interface DashboardData {
+  profile: Profile | null;
+  targets: Targets | null;
   mood: Mood;
   summaries: WorkoutSummary[];
   today: Macros;
@@ -37,6 +44,7 @@ interface DashboardData {
 
 const EMPTY_MACROS: Macros = { energy: 0, carbs: 0, protein: 0 };
 const GLASS = 'rgba(18,14,36,0.8)';
+const ACTIVITY_SWAP_MS = 25000;
 
 const MOOD_DOT: Record<Mood, string> = {
   thriving: colors.teal,
@@ -47,14 +55,18 @@ const MOOD_DOT: Record<Mood, string> = {
 
 async function loadDashboard(db: SQLiteDatabase): Promise<DashboardData> {
   const now = new Date();
-  const [summaries, activeDays, counts, daily] = await Promise.all([
+  const [profile, summaries, activeDays, counts, daily] = await Promise.all([
+    getProfile(db),
     getWorkoutSummaries(db),
     getActiveDayKeys(db),
     getCounts(db),
     getDailyMacros(db, NUTRITION_WINDOW_DAYS, now),
   ]);
+  const targets = profile ? targetsFor(profile) : null;
   return {
-    mood: moodFrom(summaries[0] ? new Date(summaries[0].date) : null, daily, now),
+    profile,
+    targets,
+    mood: moodFrom(lastActiveDate(summaries[0]?.date, profile?.createdAt), daily, targets?.energy ?? 2200, now),
     summaries,
     today: daily.get(toDayKey(now)) ?? EMPTY_MACROS,
     level: computeLevel(counts.workouts, counts.meals),
@@ -67,12 +79,15 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const activeWorkout = useActiveWorkout();
   const [data, setData] = useState<DashboardData | null>(null);
+  const [activity, setActivity] = useState<HomeActivity>(() => pickHomeActivity(phaseFor(new Date().getHours())));
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       loadDashboard(db).then((d) => {
-        if (!cancelled) setData(d);
+        if (cancelled) return;
+        if (!d.profile) router.replace('/setup');
+        else setData(d);
       });
       return () => {
         cancelled = true;
@@ -80,7 +95,16 @@ export default function Home() {
     }, [db])
   );
 
-  if (!data) return <View style={styles.screen} />;
+  const nextActivity = useCallback(() => {
+    setActivity((prev) => pickHomeActivity(phaseFor(new Date().getHours()), prev));
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(nextActivity, ACTIVITY_SWAP_MS);
+    return () => clearInterval(id);
+  }, [nextActivity]);
+
+  if (!data || !data.profile || !data.targets) return <View style={styles.screen} />;
 
   const now = new Date();
   const thisMonth = data.summaries.filter((s) => {
@@ -100,7 +124,7 @@ export default function Home() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <RoomScene mood={data.mood}>
+      <RoomScene mood={data.mood} gender={data.profile.sex} activity={activity} onPress={nextActivity}>
         <View style={[styles.hud, { top: insets.top + 10 }]}>
           <PixelFrame fill={GLASS} edge={colors.border} step={2}>
             <View style={styles.chip}>
@@ -111,12 +135,21 @@ export default function Home() {
             </View>
           </PixelFrame>
 
-          <PixelFrame fill={GLASS} edge={colors.border} step={2}>
-            <View style={styles.chip}>
-              <PixelIcon name="flame" color={colors.amber} color2="#ffe08a" px={2} />
-              <PixelText variant="bold" size={16}>{data.streak}</PixelText>
-            </View>
-          </PixelFrame>
+          <View style={styles.hudRight}>
+            <PixelFrame fill={GLASS} edge={colors.border} step={2}>
+              <View style={styles.chip}>
+                <PixelIcon name="flame" color={colors.amber} color2="#ffe08a" px={2} />
+                <PixelText variant="bold" size={16}>{data.streak}</PixelText>
+              </View>
+            </PixelFrame>
+            <Pressable accessibilityLabel="Edit profile" onPress={() => router.push('/setup')}>
+              <PixelFrame fill={GLASS} edge={colors.border} step={2}>
+                <View style={styles.gear}>
+                  <PixelIcon name="gear" color={colors.textDim} px={2} />
+                </View>
+              </PixelFrame>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.caption}>
@@ -124,7 +157,9 @@ export default function Home() {
             <View style={styles.captionInner}>
               <View style={[styles.dot, { backgroundColor: MOOD_DOT[data.mood] }]} />
               <View style={{ flex: 1 }}>
-                <PixelText variant="bold" size={16}>{MOOD_LABEL[data.mood]}</PixelText>
+                <PixelText variant="bold" size={16}>
+                  {MOOD_LABEL[data.mood]} <PixelText size={14} color={colors.textDim}>{`- ${HOME_ACTIVITY_LABEL[activity].toLowerCase()}`}</PixelText>
+                </PixelText>
                 <PixelText size={13} color={colors.textDim}>{MOOD_BLURB[data.mood]}</PixelText>
               </View>
             </View>
@@ -145,8 +180,8 @@ export default function Home() {
           <PixelButton tile icon="bowl" tone="amber" label="Log Meal" onPress={() => router.push('/log-meal')} style={{ flex: 1 }} />
         </View>
 
-        <PixelPanel label="Today's fuel">
-          <MacroJars today={data.today} />
+        <PixelPanel label={`Today's fuel - ${data.profile.goal} plan`}>
+          <MacroJars today={data.today} targets={data.targets} />
           <PixelButton label="Open cookbook" tone="ghost" icon="bowl" onPress={() => router.push('/cookbook')} />
         </PixelPanel>
 
@@ -177,7 +212,9 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: 48 },
   hud: { position: 'absolute', left: 10, right: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  hudRight: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  gear: { padding: 10 },
   caption: { position: 'absolute', left: 10, right: 10, bottom: 10 },
   captionInner: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10 },
   dot: { width: 10, height: 10 },
