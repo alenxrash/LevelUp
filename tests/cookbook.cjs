@@ -16,8 +16,8 @@ function load(relative) {
 }
 
 async function main() {
-  const { initDatabase, saveMeal, getTodaysMeals, getDailyMacros } = load('db');
-  const { getRecipes, getRecipe, getTags, createTag, saveRecipe, validateTikTok, recipeMacros } = load('recipes');
+  const { initDatabase, saveMeal, getTodaysMeals, getDailyMacros, deleteMeal, getMealHistory, getCounts } = load('db');
+  const { getRecipes, getRecipe, getTags, createTag, saveRecipe, validateTikTok, recipeMacros, deleteRecipe } = load('recipes');
   const { toDayKey } = load('dates');
   const sqlite = new DatabaseSync(':memory:');
   const db = {
@@ -49,8 +49,17 @@ async function main() {
   assert.equal(await getRecipe(db, '999'), null);
   assert.equal(validateTikTok('https://www.tiktok.com/@chef/video/123'), 'https://www.tiktok.com/@chef/video/123');
   for (const url of ['https://tiktok.com.evil.com/x', 'javascript:alert(1)', 'http://tiktok.com/x', 'https://tiktok.com@evil.com/x']) assert.throws(() => validateTikTok(url));
-  await assert.rejects(saveRecipe(db, { ...input, ingredients: [] }));
-  await assert.rejects(saveRecipe(db, { ...input, energy: Infinity }));
+  const draftId = await saveRecipe(db, { ...input, name: '', ingredients: [], steps: [], energy: 0, tags: [], tiktokUrl: '' });
+  assert.equal((await getRecipe(db, draftId)).name, 'Untitled recipe');
+  await saveMeal(db, { name: '', energy: 0, carbs: 0, protein: 0 });
+  const blankMeal = (await getMealHistory(db)).find((meal) => meal.name === 'Untitled meal');
+  assert.ok(blankMeal);
+  await deleteMeal(db, blankMeal.id);
+  await deleteRecipe(db, draftId);
+  assert.equal(await getRecipe(db, draftId), null);
+  const legacyId = await saveRecipe(db, { ...input, icon: 'carrot' });
+  assert.equal((await getRecipe(db, legacyId)).icon, 'salad');
+  await deleteRecipe(db, legacyId);
   const recipes = await getRecipes(db);
   assert.equal(recipes.length, 1);
   for (const recipe of recipes) {
@@ -66,10 +75,18 @@ async function main() {
   for (const invalid of [NaN, Infinity, -1]) {
     await assert.rejects(saveMeal(db, { name: 'Invalid', energy: 100, carbs: invalid, protein: 1 }));
   }
-  await assert.rejects(saveMeal(db, { name: ' ', energy: 100, carbs: 1, protein: 1 }));
+
   assert.equal((await getTodaysMeals(db)).length, meals.length);
   const plan = sqlite.prepare('EXPLAIN QUERY PLAN SELECT * FROM meals WHERE date >= ?').all('2026-01-01');
   assert.ok(plan.some((row) => row.detail.includes('meals_date_idx')));
+  const beforeCount = await getCounts(db);
+  const logged = meals.find((meal) => meal.name === 'Updated curry');
+  await deleteMeal(db, logged.id);
+  assert.equal((await getCounts(db)).meals, beforeCount.meals - 1);
+  assert.equal((await getDailyMacros(db, 1)).get(toDayKey(new Date())).energy, 100);
+  assert.ok(await getRecipe(db, id));
+  await deleteRecipe(db, id);
+  assert.equal((await getTodaysMeals(db)).length, 1);
   sqlite.close();
   console.log('PASS: empty cookbook, recipe create/edit/reload, tags, TikTok validation, migration preservation, portion logging, totals and indexes.');
 }

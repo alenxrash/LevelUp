@@ -56,7 +56,7 @@ export default function Cookbook() {
             <PixelText variant="bold" size={34}>Your cookbook</PixelText>
             <PixelText size={17} color={colors.textDim}>Good food. More fuel. Next level.</PixelText>
           </View>
-          <FoodSprite icon="carrot" size={64} />
+          <FoodSprite icon="salad" size={64} />
         </View>
         <PixelButton label="Add recipe" icon="plus" tone="teal" onPress={() => router.push('/recipe-editor')} />
         {error ? <><PixelText accessibilityRole="alert" color={colors.danger}>{error}</PixelText><PixelButton label="Retry" onPress={() => setAttempt((n) => n + 1)} /></> : null}

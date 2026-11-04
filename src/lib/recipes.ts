@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-export const foodIcons = ['stew', 'chicken', 'beef', 'fish', 'carrot', 'bread'] as const;
+export const foodIcons = ['stew', 'chicken', 'beef', 'fish', 'salad', 'bread', 'dessert'] as const;
 export type FoodIcon = typeof foodIcons[number];
 export const starterTags = ['soup', 'curry', 'stew', 'japanese', 'korean', 'beef', 'chicken', 'seafood', 'quickmeal'];
 export interface Recipe {
@@ -32,13 +32,21 @@ export async function initCookbook(db: SQLiteDatabase) {
     CREATE TABLE IF NOT EXISTS food_tags (name TEXT PRIMARY KEY NOT NULL);`);
   for (const tag of starterTags) await db.runAsync('INSERT OR IGNORE INTO food_tags (name) VALUES (?)', tag);
 }
+function decodeRecipe(data: string): RecipeInput {
+  const recipe = JSON.parse(data);
+  if (recipe.icon === 'carrot') recipe.icon = 'salad';
+  return recipe;
+}
+export async function deleteRecipe(db: SQLiteDatabase, id: string) {
+  await db.runAsync('DELETE FROM recipes WHERE id = ?', id);
+}
 export async function getRecipes(db: SQLiteDatabase): Promise<Recipe[]> {
   const rows = await db.getAllAsync<{ id: number; data: string }>('SELECT id, data FROM recipes ORDER BY id DESC');
-  return rows.map((row) => ({ ...JSON.parse(row.data), id: String(row.id) }));
+  return rows.map((row) => ({ ...decodeRecipe(row.data), id: String(row.id) }));
 }
 export async function getRecipe(db: SQLiteDatabase, id: string): Promise<Recipe | null> {
   const row = await db.getFirstAsync<{ id: number; data: string }>('SELECT id, data FROM recipes WHERE id = ?', id);
-  return row ? { ...JSON.parse(row.data), id: String(row.id) } : null;
+  return row ? { ...decodeRecipe(row.data), id: String(row.id) } : null;
 }
 export async function getTags(db: SQLiteDatabase): Promise<string[]> {
   const rows = await db.getAllAsync<{ name: string }>('SELECT name FROM food_tags ORDER BY name');
@@ -46,17 +54,16 @@ export async function getTags(db: SQLiteDatabase): Promise<string[]> {
 }
 export async function createTag(db: SQLiteDatabase, value: string) {
   const tag = normalizeTag(value);
-  if (!tag || tag.length > 32) throw new Error('Tags need between 1 and 32 characters.');
+  if (!tag) return '';
   await db.runAsync('INSERT OR IGNORE INTO food_tags (name) VALUES (?)', tag);
   return tag;
 }
 export async function saveRecipe(db: SQLiteDatabase, input: RecipeInput, id?: string): Promise<string> {
-  if (!input.name.trim()) throw new Error('Give your recipe a name.');
-  if (input.energy <= 0 || [input.energy, input.protein, input.carbs, input.fat, input.minutes].some((n) => !Number.isFinite(n) || n < 0)) throw new Error('Enter positive calories and non-negative macros and prep time.');
-  if (!input.ingredients.length || !input.steps.length) throw new Error('Add at least one ingredient and one cooking step.');
-  const tags = [...new Set(input.tags.map(normalizeTag))];
-  if (tags.some((tag) => !tag || tag.length > 32)) throw new Error('Tags need between 1 and 32 characters.');
-  const data: RecipeInput = { ...input, name: input.name.trim(), tags, tiktokUrl: validateTikTok(input.tiktokUrl) };
+  const tags = [...new Set(input.tags.map(normalizeTag).filter(Boolean))];
+  const number = (value: number) => Number.isFinite(value) ? Math.max(0, value) : 0;
+  const data: RecipeInput = { ...input, name: input.name.trim() || 'Untitled recipe', tags,
+    energy: number(input.energy), protein: number(input.protein), carbs: number(input.carbs), fat: number(input.fat), minutes: number(input.minutes),
+    tiktokUrl: input.tiktokUrl.trim() };
   for (const tag of tags) await createTag(db, tag);
   if (id) {
     const result = await db.runAsync('UPDATE recipes SET data = ? WHERE id = ?', JSON.stringify(data), id);

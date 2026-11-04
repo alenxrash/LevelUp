@@ -33,7 +33,7 @@ export default function LogMeal() {
     }, [db])
   );
 
-  const canSave = name.trim().length > 0 && Number(energy) > 0 && [energy, carbs, protein, fat].every((value) => Number.isFinite(Number(value)) && Number(value) >= 0);
+  const canSave = [energy, carbs, protein, fat].every((value) => Number.isFinite(Number(value)) && Number(value) >= 0);
 
   async function addMeal(thenClose: boolean) {
     if (!canSave || saveLock.current) return;
@@ -87,6 +87,7 @@ export default function LogMeal() {
         <PixelButton label="Add & Log Another" tone="ghost" icon="plus" onPress={() => addMeal(false)} disabled={!canSave || saving} />
       </PixelPanel>
 
+      <PixelButton label="Meal history / delete logged food" tone="ghost" onPress={() => router.push('/meal-history')} />
       <PixelPanel label={`Eaten today (${todays.length})`}>
         {todays.length === 0 ? (
           <PixelText color={colors.textFaint}>Nothing logged yet today.</PixelText>

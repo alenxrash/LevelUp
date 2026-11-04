@@ -139,13 +139,13 @@ export interface MealEntry extends MealInput {
 
 export async function saveMeal(db: SQLiteDatabase, meal: MealInput): Promise<void> {
   const values = [meal.energy, meal.carbs, meal.protein, meal.fat ?? 0];
-  if (!meal.name.trim() || meal.energy <= 0 || values.some((value) => !Number.isFinite(value) || value < 0)) {
-    throw new Error('Enter a meal name, positive energy and non-negative macros.');
+  if (values.some((value) => !Number.isFinite(value) || value < 0)) {
+    throw new Error('Use non-negative numbers for macros.');
   }
   await db.runAsync(
     'INSERT INTO meals (date, name, energy, carbs, protein, fat) VALUES (?, ?, ?, ?, ?, ?)',
     new Date().toISOString(),
-    meal.name,
+    meal.name.trim() || 'Untitled meal',
     meal.energy,
     meal.carbs,
     meal.protein,
@@ -157,6 +157,14 @@ export interface Macros {
   energy: number;
   carbs: number;
   protein: number;
+}
+
+export async function deleteMeal(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync('DELETE FROM meals WHERE id = ?', id);
+}
+
+export async function getMealHistory(db: SQLiteDatabase): Promise<MealEntry[]> {
+  return db.getAllAsync<MealEntry>('SELECT id, date, name, energy, carbs, protein, fat FROM meals ORDER BY date DESC');
 }
 
 const EMPTY_MACROS: Macros = { energy: 0, carbs: 0, protein: 0 };

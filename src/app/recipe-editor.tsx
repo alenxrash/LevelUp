@@ -68,18 +68,19 @@ export default function RecipeEditor() {
     <PixelText variant="bold" size={30}>{id ? 'Edit your recipe' : 'A new favourite'}</PixelText>
     {error ? <PixelText accessibilityRole="alert" color={colors.danger}>{error}</PixelText> : null}
     {loading ? <PixelText>Loading editor...</PixelText> : <View style={styles.fields} pointerEvents={saving ? 'none' : 'auto'}>
-      <PixelInput label="Recipe name" value={name} onChangeText={setName} placeholder="My chicken curry" maxLength={100} />
+      <PixelText color={colors.textDim}>All fields are optional. Save what you have and fill in the rest later.</PixelText>
+      <PixelInput label="Recipe name (optional)" value={name} onChangeText={setName} placeholder="My chicken curry" />
       <PixelText variant="label" size={10}>CHOOSE YOUR FOOD ICON</PixelText>
       <View style={styles.icons}>{foodIcons.map((food) => <Pressable key={food} accessibilityRole="button" accessibilityLabel={`${food} icon`} accessibilityState={{ selected: icon === food }} onPress={() => setIcon(food)} style={[styles.icon, icon === food && styles.chosen]}><FoodSprite icon={food} size={64} /><PixelText size={13}>{food}</PixelText></Pressable>)}</View>
       <PixelInput label="Prep + cook time (minutes)" value={minutes} onChangeText={setMinutes} keyboardType="numeric" placeholder="30" />
       <PixelText color={colors.textDim}>Enter ingredients and macros for ONE serving. Portions can be adjusted when logging.</PixelText>
       <View style={styles.row}><PixelInput label="Calories (kcal)" value={energy} onChangeText={setEnergy} keyboardType="decimal-pad" placeholder="450" /><PixelInput label="Protein (g)" value={protein} onChangeText={setProtein} keyboardType="decimal-pad" placeholder="0" /></View>
       <View style={styles.row}><PixelInput label="Carbs (g)" value={carbs} onChangeText={setCarbs} keyboardType="decimal-pad" placeholder="0" /><PixelInput label="Fat (g)" value={fat} onChangeText={setFat} keyboardType="decimal-pad" placeholder="0" /></View>
-      <PixelInput label="Ingredients (one per line)" value={ingredients} onChangeText={setIngredients} multiline style={styles.multiline} placeholder={'150 g chicken\n100 g cooked rice'} />
-      <PixelInput label="Method (one step per line)" value={steps} onChangeText={setSteps} multiline style={styles.multiline} placeholder="Add each cooking step on a new line" />
+      <PixelInput label="Ingredients (optional, one per line)" value={ingredients} onChangeText={setIngredients} multiline style={styles.multiline} placeholder={'150 g chicken\n100 g cooked rice'} />
+      <PixelInput label="Method (optional, one step per line)" value={steps} onChangeText={setSteps} multiline style={styles.multiline} placeholder="Add each cooking step on a new line" />
       <PixelText variant="label" size={10}>FOOD TAGS · PICK AS MANY AS YOU LIKE</PixelText>
       <TagPicker tags={tags} selected={selected} onToggle={(tag) => setSelected((all) => all.includes(tag) ? all.filter((t) => t !== tag) : [...all, tag])} />
-      <View style={styles.row}><PixelInput label="Create a tag" value={newTag} onChangeText={setNewTag} placeholder="vegetarian" maxLength={32} /><PixelButton label={tagSaving ? 'Adding...' : 'Add tag'} tone="ghost" disabled={!newTag.trim() || tagSaving} onPress={addTag} /></View>
+      <View style={styles.row}><PixelInput label="Create a tag" value={newTag} onChangeText={setNewTag} placeholder="vegetarian" /><PixelButton label={tagSaving ? 'Adding...' : 'Add tag'} tone="ghost" disabled={!newTag.trim() || tagSaving} onPress={addTag} /></View>
       <PixelInput label="TikTok link (optional)" value={url} onChangeText={setUrl} keyboardType="url" autoCapitalize="none" autoCorrect={false} placeholder="https://www.tiktok.com/@creator/video/..." />
       <PixelText color={colors.textDim} size={14}>Save a video as a cooking reference. It opens in TikTok or your browser.</PixelText>
       <PixelButton label={saving ? 'Saving...' : 'Save recipe'} icon="check" onPress={save} disabled={saving || tagSaving} />

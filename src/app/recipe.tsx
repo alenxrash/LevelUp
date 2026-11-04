@@ -5,10 +5,11 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PixelButton } from '../components/PixelButton';
 import { PixelText } from '../components/PixelText';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { FoodSprite } from '../components/FoodSprite';
 import * as Linking from 'expo-linking';
 import { saveMeal } from '../lib/db';
-import { recipeMacros, getRecipe, validateTikTok, type Recipe } from '../lib/recipes';
+import { recipeMacros, getRecipe, deleteRecipe, validateTikTok, type Recipe } from '../lib/recipes';
 import { colors } from '../theme';
 
 export default function RecipeScreen() {
@@ -22,6 +23,9 @@ export default function RecipeScreen() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const lock = useRef(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleting = useRef(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   useFocusEffect(useCallback(() => {
     let active = true;
     setLoading(true); setError('');
@@ -58,13 +62,23 @@ export default function RecipeScreen() {
       try { const link = validateTikTok(recipe.tiktokUrl); Linking.openURL(link).catch(() => setError('Could not open TikTok. Please try again.')); }
       catch { setError('This TikTok link is invalid. Edit the recipe to replace it.'); }
     }} /> : null}
+    <PixelButton label="Delete saved recipe" tone="danger" disabled={saving || isDeleting} onPress={() => setConfirmDelete(true)} />
+    <ConfirmModal visible={confirmDelete} title="Delete recipe?" message="Remove this recipe from your cookbook? Meals already logged will remain in your history." confirmLabel={isDeleting ? 'Deleting...' : 'Delete'} onCancel={() => { if (!deleting.current) setConfirmDelete(false); }} onConfirm={async () => {
+      if (deleting.current) return;
+      deleting.current = true; setIsDeleting(true);
+      try { await deleteRecipe(db, recipe.id); router.replace('/cookbook'); }
+      catch { setError('Could not delete recipe. Please try again.'); }
+      finally { deleting.current = false; setIsDeleting(false); setConfirmDelete(false); }
+    }} />
     <View style={styles.paper}>
       <PixelText variant="label" size={11} color={colors.paperInk}>RECIPE NOTES / 01</PixelText>
       <PixelText variant="bold" size={26} color={colors.paperInk}>Gather your ingredients</PixelText>
       <PixelText size={14} color={colors.paperInk}>Quantities below make 1 serving.</PixelText>
+      {!recipe.ingredients.length ? <PixelText color={colors.paperInk}>No ingredients added yet.</PixelText> : null}
       {recipe.ingredients.map((ingredient, index) => <PixelText key={`${index}-${ingredient}`} size={18} color={colors.paperInk}>· {ingredient}</PixelText>)}
       <View style={styles.rule} />
       <PixelText variant="bold" size={26} color={colors.paperInk}>Let’s get cooking</PixelText>
+      {!recipe.steps.length ? <PixelText color={colors.paperInk}>No cooking steps added yet.</PixelText> : null}
       {recipe.steps.map((step, index) => <View key={`${index}-${step}`} style={styles.step}><PixelText variant="bold" size={22} color={colors.paperInk}>{String(index + 1).padStart(2, '0')}</PixelText><PixelText style={styles.stepCopy} size={18} color={colors.paperInk}>{step}</PixelText></View>)}
     </View>
     <View style={styles.fuel}>
